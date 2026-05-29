@@ -1,0 +1,25 @@
+{
+  "name": "@veille/discovery",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@veille/adapter-pdf": "workspace:*",
+    "@veille/adapter-web": "workspace:*",
+    "@veille/adapter-youtube": "workspace:*",
+    "@veille/core": "workspace:*",
+    "rss-parser": "^3.13.0",
+    "youtubei.js": "^17.0.1"
+  }
+}

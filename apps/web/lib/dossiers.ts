@@ -80,3 +80,33 @@ export async function setTemplate(ownerId: string, slug: string, template: strin
     .set({ template })
     .where(and(eq(dossiers.ownerId, ownerId), eq(dossiers.slug, slug)));
 }
+
+type NewSource = {
+  connector: string;
+  kind: 'standing' | 'item';
+  input: unknown;
+  label?: string | null;
+};
+
+/** Owner-scoped: adds a source to the dossier identified by (ownerId, slug). Returns the new source id, or null if the dossier isn't the caller's. */
+export async function addSource(ownerId: string, slug: string, source: NewSource): Promise<string | null> {
+  const dossier = await getDossier(ownerId, slug);
+  if (!dossier) return null;
+  const id = uuidv7();
+  await db.insert(sources).values({
+    id,
+    dossierId: dossier.id,
+    connector: source.connector,
+    kind: source.kind,
+    input: source.input,
+    label: source.label ?? null,
+  } as typeof sources.$inferInsert);
+  return id;
+}
+
+/** Owner-scoped: removes a source from the dossier identified by (ownerId, slug). */
+export async function removeSource(ownerId: string, slug: string, sourceId: string): Promise<void> {
+  const dossier = await getDossier(ownerId, slug);
+  if (!dossier) return;
+  await db.delete(sources).where(and(eq(sources.id, sourceId), eq(sources.dossierId, dossier.id)));
+}

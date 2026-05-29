@@ -22,6 +22,8 @@ export type {
 } from './suggest.js';
 export { planTavilyQueries, EmptyIntentError } from './plan-queries.js';
 export type { PlannedQuery, PlanQueriesInput, PlanQueriesResult } from './plan-queries.js';
+export { planDossier, EmptyIntentError as EmptyDossierIntentError } from './plan-dossier.js';
+export type { DossierPlan, DossierTemplate, PlannedSource, PlanDossierInput } from './plan-dossier.js';
 export { optimizeDescription } from './optimize-description.js';
 export type {
   OptimizeDescriptionInput,

@@ -5,4 +5,5 @@ dist/
 .env.local
 .veille/
 *.tsbuildinfo
+next-env.d.ts
 drizzle/meta/_journal.json.lock

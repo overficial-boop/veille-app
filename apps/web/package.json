@@ -1,0 +1,51 @@
+{
+  "name": "@veille/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "pnpm --filter \"@veille/core\" --filter \"@veille/adapter-youtube\" --filter \"@veille/adapter-web\" --filter \"@veille/adapter-text\" --filter \"@veille/adapter-pdf\" --filter \"@veille/discovery\" build",
+    "dev": "next dev",
+    "prebuild": "pnpm --filter \"@veille/core\" --filter \"@veille/adapter-youtube\" --filter \"@veille/adapter-web\" --filter \"@veille/adapter-text\" --filter \"@veille/adapter-pdf\" --filter \"@veille/discovery\" build",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@veille/core": "workspace:*",
+    "@veille/adapter-youtube": "workspace:*",
+    "@veille/adapter-web": "workspace:*",
+    "@veille/adapter-text": "workspace:*",
+    "@veille/adapter-pdf": "workspace:*",
+    "@veille/discovery": "workspace:*",
+    "better-auth": "^1.2.0",
+    "drizzle-orm": "^0.36.0",
+    "pg": "^8.13.0",
+    "resend": "^4.0.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.460.0",
+    "tailwind-merge": "^2.5.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-tabs": "^1.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "drizzle-kit": "^0.28.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.6.0"
+  }
+}

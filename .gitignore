@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.next/
+.env
+.env.local
+.veille/
+*.tsbuildinfo
+drizzle/meta/_journal.json.lock

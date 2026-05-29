@@ -10,7 +10,7 @@ import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
 import { insertFacts } from './dossiers';
 
 // --- Relevance tuning knobs (calibrated empirically; see R3) ---
-const CANDIDATE_SCORE_FLOOR = 0.4;    // drop Tavily results weaker than this
+const CANDIDATE_SCORE_FLOOR = 0.4;    // drop weaker results — only applied to scored (Tavily) candidates
 const MAX_CANDIDATES_PER_SOURCE = 6;  // cap URLs mined per standing source per refresh
 const FACT_RELEVANCE_FLOOR = 0.5;     // drop extracted facts less relevant than this to the subject
 
@@ -59,8 +59,10 @@ export async function refreshDossier(
         // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates
         // mutates seenUrls (marks what it returns as seen). Filtering first means only the
         // URLs we actually mine get marked seen; weaker ones can resurface on a later refresh.
+        // Unscored candidates (RSS / YouTube-channel set no score) pass the floor;
+        // only scored (Tavily) candidates must clear it. The cap still bounds all.
         const ranked = [...candidates]
-          .filter((c) => (c.score ?? 0) >= CANDIDATE_SCORE_FLOOR)
+          .filter((c) => c.score === undefined || c.score >= CANDIDATE_SCORE_FLOOR)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .slice(0, MAX_CANDIDATES_PER_SOURCE);
         // skip candidate URLs already extracted on a prior refresh (spec §5); the

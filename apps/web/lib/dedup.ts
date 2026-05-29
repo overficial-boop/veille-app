@@ -15,3 +15,16 @@ export function filterNewFacts(incoming: Fact[], seen: Set<string>): Fact[] {
   }
   return fresh;
 }
+
+/** Returns items whose `url` is not already in `seenUrls`; mutates `seenUrls` to
+ *  include the kept ones (so duplicate URLs within one batch collapse too).
+ *  Used to skip candidate URLs already extracted on a prior refresh. */
+export function freshCandidates<T extends { url: string }>(items: T[], seenUrls: Set<string>): T[] {
+  const fresh: T[] = [];
+  for (const item of items) {
+    if (seenUrls.has(item.url)) continue;
+    seenUrls.add(item.url);
+    fresh.push(item);
+  }
+  return fresh;
+}

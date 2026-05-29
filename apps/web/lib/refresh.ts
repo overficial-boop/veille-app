@@ -6,7 +6,7 @@ import type { Fact } from '@veille/core';
 import { discoverTavily, discoverRss, discoverYouTubeChannel } from '@veille/discovery';
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
-import { dedupKey, filterNewFacts } from './dedup';
+import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
 import { insertFacts } from './dossiers';
 
 export type RefreshProgress =
@@ -35,6 +35,7 @@ export async function refreshDossier(
   const srcRows = await db.select().from(sources).where(eq(sources.dossierId, dossierId));
   const existing = await db.select({ sourceUrl: facts.sourceUrl, text: facts.text }).from(facts).where(eq(facts.dossierId, dossierId));
   const seen = new Set(existing.map((e) => dedupKey(e)));
+  const seenUrls = new Set(existing.map((e) => e.sourceUrl));
   let total = seen.size;
 
   for (const src of srcRows) {
@@ -45,8 +46,9 @@ export async function refreshDossier(
       let extracted: Fact[] = [];
       if (src.kind === 'standing') {
         const candidates = await candidatesFor(src);
-        for (const c of candidates) {
-          if (seen.has(`${c.url}\n`)) continue; // cheap pre-skip; full dedup below by (url,text)
+        // skip candidate URLs already extracted on a prior refresh (spec §5); the
+        // (sourceUrl,text) dedup below is the secondary, fact-level guard.
+        for (const c of freshCandidates(candidates, seenUrls)) {
           const adapter = findAdapter({ kind: 'url', url: c.url });
           if (!adapter) continue;
           try { extracted = extracted.concat(await extract(c.url, { language: lang, withSummary: false })); }

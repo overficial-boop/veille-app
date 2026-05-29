@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dedupKey, filterNewFacts } from './dedup';
+import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
 import type { Fact } from '@veille/core';
 
 const f = (sourceUrl: string, text: string): Fact =>
@@ -16,6 +16,22 @@ describe('dedup', () => {
 
   it('dedupes duplicates within the same batch', () => {
     const fresh = filterNewFacts([f('u', 'a'), f('u', 'a')], new Set());
+    expect(fresh).toHaveLength(1);
+  });
+});
+
+describe('freshCandidates', () => {
+  const c = (url: string) => ({ url });
+
+  it('drops items whose URL is already in seenUrls, and adds kept URLs to the set', () => {
+    const seenUrls = new Set<string>(['https://a.com']);
+    const fresh = freshCandidates([c('https://a.com'), c('https://b.com')], seenUrls);
+    expect(fresh.map((x) => x.url)).toEqual(['https://b.com']);
+    expect(seenUrls.has('https://b.com')).toBe(true); // mutated with the kept one
+  });
+
+  it('collapses duplicate URLs within the same batch', () => {
+    const fresh = freshCandidates([c('https://a.com'), c('https://a.com')], new Set());
     expect(fresh).toHaveLength(1);
   });
 });

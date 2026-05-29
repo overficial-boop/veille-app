@@ -155,8 +155,9 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
 
   // Auto-start assembly exactly once when the dossier is still building.
   // Empty deps + a started-ref so React strict-mode's double-invoke can't
-  // open two streams. After `done`, router.refresh() re-renders the server
-  // page with status='active', so this island remounts and won't re-trigger.
+  // open two streams. After `done`, router.refresh() refetches server data and
+  // reconciles this island IN PLACE (no remount); startedRef persists across
+  // the re-render and the deps are [], so the effect never re-fires.
   React.useEffect(() => {
     if (status === 'building' && !startedRef.current) {
       startedRef.current = true;

@@ -6,7 +6,7 @@ Return a JSON object with this shape, in this exact field order:
 {
   "summary": "<2-3 sentence summary, in {{language}}>",
   "facts": [
-    { "text": "...", "timestampStart": 12.3, "timestampEnd": 15.6, "confidence": 0.95 },
+    { "text": "...", "timestampStart": 12.3, "timestampEnd": 15.6, "confidence": 0.95, "relevance": 0.9 },
     ...
   ]
 }
@@ -25,6 +25,9 @@ a quoted statement, a relationship between named entities). For each fact:
 - timestampStart: {{locatorUnit}} where the supporting passage begins
 - timestampEnd: {{locatorUnit}} where the supporting passage ends
 - confidence: 0-1, your honest confidence this is a clear, verifiable fact
+- relevance: 0-1, how directly this fact concerns the subject hint below
+  (1 = squarely about the subject; low = tangential/background/co-occurring).
+  If no subject hint is provided, set relevance to 1.
 
 The {{contentType}} is shown with `{{markerExample}}` markers giving the
 {{locatorUnit}} of each segment. Use those markers when picking
@@ -33,8 +36,11 @@ supports the fact — don't widen it. The source passage is reconstructed from
 these markers automatically.
 
 Subject hint: {{subjectHint}}
-Only extract facts relevant to this hint. If no hint is provided, extract all
-facts you can identify.
+If a subject hint is provided, extract ONLY facts that genuinely concern that
+subject. The page often covers other people, entities, or events that merely
+co-occur with the subject — do NOT extract those; skip them. Score each kept
+fact's `relevance` to the subject. If no subject hint is provided, extract all
+facts you can identify and set relevance to 1.
 
 Skip pure opinion, commentary, and filler — unless they are direct quotes
 attributable to a named speaker, in which case extract them as quote facts.

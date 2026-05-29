@@ -94,6 +94,7 @@ export async function discoverTavily(config: TavilyConfig): Promise<Candidate[]>
     if (site) cand.siteName = site;
     const excerpt = clipExcerpt(item.content);
     if (excerpt) cand.excerpt = excerpt;
+    if (typeof item.score === 'number') cand.score = item.score;
     out.push(cand);
   }
   return out;

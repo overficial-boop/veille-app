@@ -166,6 +166,7 @@ export async function runFactExtraction(
       const factProvenance = {
         ...sourceProvenance,
         ...buildFactProvenance({ locatorStart: raw.timestampStart, locatorEnd: raw.timestampEnd }),
+        ...(raw.relevance !== undefined ? { relevance: raw.relevance } : {}),
       };
       allFacts.push({
         id: uuidv7(),

@@ -11,6 +11,8 @@ export type Candidate = {
   siteName?: string;
   /** Short description / snippet preview. */
   excerpt?: string;
+  /** Provider relevance score (e.g. Tavily 0-1), when available. */
+  score?: number;
   /** Raw provider payload for debugging / future use. */
   raw?: Record<string, unknown>;
 };

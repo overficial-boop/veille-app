@@ -5,6 +5,7 @@ const RawFactSchema = z.object({
   timestampStart: z.number(),
   timestampEnd: z.number(),
   confidence: z.number().min(0).max(1),
+  relevance: z.number().min(0).max(1).optional(),
 });
 export type RawFact = z.infer<typeof RawFactSchema>;
 
@@ -30,9 +31,10 @@ export const FACTS_RESPONSE_SCHEMA = {
           timestampStart: { type: 'NUMBER' },
           timestampEnd: { type: 'NUMBER' },
           confidence: { type: 'NUMBER' },
+          relevance: { type: 'NUMBER' },
         },
         required: ['text', 'timestampStart', 'timestampEnd', 'confidence'],
-        propertyOrdering: ['text', 'timestampStart', 'timestampEnd', 'confidence'],
+        propertyOrdering: ['text', 'timestampStart', 'timestampEnd', 'confidence', 'relevance'],
       },
     },
   },

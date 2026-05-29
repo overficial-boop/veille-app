@@ -38,6 +38,7 @@ export const facts = pgTable('facts', {
   sourceId: uuid('source_id')
     .notNull()
     .references(() => sources.id, { onDelete: 'cascade' }),
+  sourceUrl: text('source_url').notNull(),
   text: text('text').notNull(),
   sourcePassage: text('source_passage').notNull(),
   language: text('language').notNull(),

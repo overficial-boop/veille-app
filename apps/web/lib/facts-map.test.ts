@@ -12,7 +12,7 @@ describe('factToRow', () => {
   it('maps a Fact onto the facts table columns', () => {
     const row = factToRow(fact, 'doss-1', 'src-1');
     expect(row).toMatchObject({
-      id: 'f1', dossierId: 'doss-1', sourceId: 'src-1', text: 't', sourcePassage: 'p',
+      id: 'f1', dossierId: 'doss-1', sourceId: 'src-1', sourceUrl: 'u', text: 't', sourcePassage: 'p',
       language: 'fr', provenance: { a: 1 }, extractedBy: { model: 'm', promptHash: 'h', adapter: 'web' }, confidence: 0.9,
     });
     expect(row.extractedAt instanceof Date).toBe(true);

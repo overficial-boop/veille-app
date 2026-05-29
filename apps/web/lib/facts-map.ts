@@ -8,6 +8,7 @@ export function factToRow(fact: Fact, dossierId: string, sourceId: string): Fact
     id: fact.id,
     dossierId,
     sourceId,
+    sourceUrl: fact.sourceUrl,
     text: fact.text,
     sourcePassage: fact.sourcePassage,
     language: fact.language,

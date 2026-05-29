@@ -1,0 +1,48 @@
+import { pgTable, text, timestamp, jsonb, real, uuid } from 'drizzle-orm/pg-core';
+import { user } from './auth-schema';
+
+export const dossiers = pgTable('dossiers', {
+  id: uuid('id').primaryKey(),
+  ownerId: text('owner_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  intent: text('intent').notNull(),
+  language: text('language'),
+  template: text('template').notNull().default('feed'), // 'profile' | 'chronology' | 'feed'
+  cadence: jsonb('cadence'), // planner-suggested rhythm; NOT acted on in M1
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  refreshedAt: timestamp('refreshed_at', { withTimezone: true }),
+});
+
+export const sources = pgTable('sources', {
+  id: uuid('id').primaryKey(),
+  dossierId: uuid('dossier_id')
+    .notNull()
+    .references(() => dossiers.id, { onDelete: 'cascade' }),
+  connector: text('connector').notNull(), // youtube|web|text|pdf|tavily|rss|youtube-channel
+  kind: text('kind').notNull(), // 'standing' | 'item'
+  input: jsonb('input').notNull(),
+  label: text('label'),
+  lastExtractedAt: timestamp('last_extracted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const facts = pgTable('facts', {
+  id: uuid('id').primaryKey(),
+  dossierId: uuid('dossier_id')
+    .notNull()
+    .references(() => dossiers.id, { onDelete: 'cascade' }),
+  sourceId: uuid('source_id')
+    .notNull()
+    .references(() => sources.id, { onDelete: 'cascade' }),
+  text: text('text').notNull(),
+  sourcePassage: text('source_passage').notNull(),
+  language: text('language').notNull(),
+  provenance: jsonb('provenance').notNull(),
+  extractedBy: jsonb('extracted_by').notNull(),
+  confidence: real('confidence'),
+  extractedAt: timestamp('extracted_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

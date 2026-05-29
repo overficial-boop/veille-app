@@ -13,6 +13,7 @@ import { insertFacts } from './dossiers';
 const CANDIDATE_SCORE_FLOOR = 0.4;    // drop weaker results — only applied to scored (Tavily) candidates
 const MAX_CANDIDATES_PER_SOURCE = 6;  // cap URLs mined per standing source per refresh
 const FACT_RELEVANCE_FLOOR = 0.5;     // drop extracted facts less relevant than this to the subject
+const MAX_FACTS_PER_URL = 20;         // backstop: keep at most the top-N facts from any single page
 
 export type RefreshProgress =
   | { type: 'source-start'; label: string }
@@ -27,6 +28,16 @@ async function candidatesFor(source: SourceRow): Promise<Candidate[]> {
   if (source.connector === 'rss') return discoverRss(source.input as never);
   if (source.connector === 'youtube-channel') return discoverYouTubeChannel(source.input as never);
   return [];
+}
+
+/** Keep at most `n` facts from one page, ranked by relevance × confidence (best first). */
+function topFactsPerUrl(urlFacts: Fact[], n: number): Fact[] {
+  if (urlFacts.length <= n) return urlFacts;
+  const score = (f: Fact): number => {
+    const r = (f.provenance as { relevance?: number } | null)?.relevance;
+    return (typeof r === 'number' ? r : 1) * (f.confidence ?? 0.5);
+  };
+  return [...urlFacts].sort((a, b) => score(b) - score(a)).slice(0, n);
 }
 
 export async function refreshDossier(
@@ -70,12 +81,12 @@ export async function refreshDossier(
         for (const c of freshCandidates(ranked, seenUrls)) {
           const adapter = findAdapter({ kind: 'url', url: c.url });
           if (!adapter) continue;
-          try { extracted = extracted.concat(await extract(c.url, { language: lang, withSummary: false, subjectHint })); }
+          try { extracted = extracted.concat(topFactsPerUrl(await extract(c.url, { language: lang, withSummary: false, subjectHint }), MAX_FACTS_PER_URL)); }
           catch { /* skip a bad candidate URL, keep going */ }
         }
       } else {
         const url = (src.input as { url: string }).url;
-        extracted = await extract(url, { language: lang, withSummary: false, subjectHint });
+        extracted = topFactsPerUrl(await extract(url, { language: lang, withSummary: false, subjectHint }), MAX_FACTS_PER_URL);
       }
       // Drop facts the model scored as weakly-relevant to the subject (only when we have a
       // subjectHint; unscored facts are KEPT). Applied BEFORE dedup so `seen` tracks only

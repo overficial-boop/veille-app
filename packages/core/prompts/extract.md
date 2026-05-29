@@ -45,8 +45,12 @@ facts you can identify and set relevance to 1.
 Skip pure opinion, commentary, and filler — unless they are direct quotes
 attributable to a named speaker, in which case extract them as quote facts.
 
-Extraction granularity: liberal. Capture every distinct factual claim, even if
-some seem minor.
+Extraction granularity: SELECTIVE. Extract the facts a concise, well-informed
+dossier on the subject would include — significant events, decisions, positions,
+relationships, and dated developments. Omit trivia and encyclopedic granularity
+(incidental biographical minutiae, routine procedural detail) unless clearly
+material to the subject. Prefer fewer, high-signal facts over exhaustive
+coverage; quality over quantity.
 
 {{contentType}} (with {{locatorUnit}} markers):
 {{chunk}}

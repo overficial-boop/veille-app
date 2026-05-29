@@ -9,6 +9,11 @@ import { registerAllAdapters } from './adapters';
 import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
 import { insertFacts } from './dossiers';
 
+// --- Relevance tuning knobs (calibrated empirically; see R3) ---
+const CANDIDATE_SCORE_FLOOR = 0.4;    // drop Tavily results weaker than this
+const MAX_CANDIDATES_PER_SOURCE = 6;  // cap URLs mined per standing source per refresh
+const FACT_RELEVANCE_FLOOR = 0.5;     // drop extracted facts less relevant than this to the subject
+
 export type RefreshProgress =
   | { type: 'source-start'; label: string }
   | { type: 'facts'; sourceLabel: string; added: number; total: number }
@@ -32,6 +37,11 @@ export async function refreshDossier(
   const onProgress = opts.onProgress ?? (() => {});
   const lang = opts.language ?? 'fr';
 
+  const [dossier] = await db.select().from(dossiers).where(eq(dossiers.id, dossierId));
+  const subjectHint = dossier
+    ? [dossier.name, dossier.intent].filter(Boolean).join(' — ')
+    : '';
+
   const srcRows = await db.select().from(sources).where(eq(sources.dossierId, dossierId));
   const existing = await db.select({ sourceUrl: facts.sourceUrl, text: facts.text }).from(facts).where(eq(facts.dossierId, dossierId));
   const seen = new Set(existing.map((e) => dedupKey(e)));
@@ -46,19 +56,36 @@ export async function refreshDossier(
       let extracted: Fact[] = [];
       if (src.kind === 'standing') {
         const candidates = await candidatesFor(src);
+        // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates
+        // mutates seenUrls (marks what it returns as seen). Filtering first means only the
+        // URLs we actually mine get marked seen; weaker ones can resurface on a later refresh.
+        const ranked = [...candidates]
+          .filter((c) => (c.score ?? 0) >= CANDIDATE_SCORE_FLOOR)
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+          .slice(0, MAX_CANDIDATES_PER_SOURCE);
         // skip candidate URLs already extracted on a prior refresh (spec §5); the
         // (sourceUrl,text) dedup below is the secondary, fact-level guard.
-        for (const c of freshCandidates(candidates, seenUrls)) {
+        for (const c of freshCandidates(ranked, seenUrls)) {
           const adapter = findAdapter({ kind: 'url', url: c.url });
           if (!adapter) continue;
-          try { extracted = extracted.concat(await extract(c.url, { language: lang, withSummary: false })); }
+          try { extracted = extracted.concat(await extract(c.url, { language: lang, withSummary: false, subjectHint })); }
           catch { /* skip a bad candidate URL, keep going */ }
         }
       } else {
         const url = (src.input as { url: string }).url;
-        extracted = await extract(url, { language: lang, withSummary: false });
+        extracted = await extract(url, { language: lang, withSummary: false, subjectHint });
       }
-      const fresh = filterNewFacts(extracted, seen);
+      // Drop facts the model scored as weakly-relevant to the subject (only when we have a
+      // subjectHint; unscored facts are KEPT). Applied BEFORE dedup so `seen` tracks only
+      // facts we actually keep.
+      const relevantExtracted =
+        subjectHint.length > 0
+          ? extracted.filter((f) => {
+              const r = (f.provenance as { relevance?: number } | null)?.relevance;
+              return typeof r !== 'number' || r >= FACT_RELEVANCE_FLOOR; // keep if unscored or above floor
+            })
+          : extracted;
+      const fresh = filterNewFacts(relevantExtracted, seen);
       // group fresh facts by their real sourceUrl is unnecessary — store under this source row
       await insertFacts(dossierId, src.id, fresh);
       total += fresh.length;

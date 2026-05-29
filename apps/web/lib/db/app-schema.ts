@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, real, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, real, uuid, uniqueIndex } from 'drizzle-orm/pg-core';
 import { user } from './auth-schema';
 
 export const dossiers = pgTable('dossiers', {
@@ -12,9 +12,10 @@ export const dossiers = pgTable('dossiers', {
   template: text('template').notNull().default('feed'), // 'profile' | 'chronology' | 'feed'
   cadence: jsonb('cadence'), // planner-suggested rhythm; NOT acted on in M1
   status: text('status').notNull().default('active'),
+  slug: text('slug').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   refreshedAt: timestamp('refreshed_at', { withTimezone: true }),
-});
+}, (t) => [uniqueIndex('dossiers_owner_slug_idx').on(t.ownerId, t.slug)]);
 
 export const sources = pgTable('sources', {
   id: uuid('id').primaryKey(),

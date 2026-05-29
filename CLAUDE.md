@@ -52,7 +52,7 @@ Dev uses the VPS Postgres (Postgres 16 on `root@178.104.52.131`, localhost-only)
 ssh -L 15432:localhost:5432 root@178.104.52.131 -N      # keep open during dev
 ```
 
-`DATABASE_URL` points at `localhost:15432/veille_dev`. (Local port **15432**, not 5433 — 5433 is a reserved Windows port range and the bind is denied.)
+`DATABASE_URL` points at `localhost:15432/veille_dev`. Tunnel port **15432** is deliberate: the dev machine already runs **local Postgres 16 on `:5432` and Postgres 18 on `:5433`**, so the tunnel avoids both. The local Postgres is **not** used for dev — its superuser password is unknown/unsaved (no `pgpass.conf`), and resetting it needs admin + a service restart (not worth it). Claude opens the tunnel itself during its own DB work (background `ssh -L`); a human only needs to run it to drive the app standalone without a Claude session.
 
 ## Operational gotchas (hard-won — heed these)
 

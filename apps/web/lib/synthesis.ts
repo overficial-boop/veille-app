@@ -1,4 +1,9 @@
 import type { Fact } from '@veille/core';
+import { eq, desc } from 'drizzle-orm';
+import { db } from './db';
+import { dossiers, facts as factsTable, dossierUpdates } from './db/schema';
+import { selectLlmClient } from '@veille/core';
+import { setBrief, addUpdate } from './dossiers';
 
 export type SourceGroup = { host: string; facts: Fact[] };
 
@@ -109,4 +114,94 @@ export function buildUpdatePrompt(subject: string, language: string, brief: stri
     'NEW FACTS BY PUBLICATION:',
     renderGroups(newGroups),
   ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator
+// ---------------------------------------------------------------------------
+
+export type SynthesisProgress = {
+  type: 'synthesis';
+  phase: 'brief' | 'update';
+  state: 'start' | 'done' | 'skip';
+};
+
+function toFact(row: typeof factsTable.$inferSelect): Fact {
+  return {
+    id: row.id,
+    text: row.text,
+    sourceUrl: row.sourceUrl,
+    sourcePassage: row.sourcePassage,
+    language: row.language,
+    extractedAt: row.extractedAt.toISOString(),
+    provenance: row.provenance as Fact['provenance'],
+    extractedBy: row.extractedBy as Fact['extractedBy'],
+    confidence: row.confidence ?? undefined,
+  };
+}
+
+/** Returns the cutoff time for "new" facts in an update: latest update, else brief time. */
+async function newFactsCutoff(dossierId: string, briefGeneratedAt: Date | null): Promise<Date | null> {
+  const [u] = await db
+    .select({ at: dossierUpdates.createdAt })
+    .from(dossierUpdates)
+    .where(eq(dossierUpdates.dossierId, dossierId))
+    .orderBy(desc(dossierUpdates.createdAt))
+    .limit(1);
+  return u?.at ?? briefGeneratedAt ?? null;
+}
+
+export async function composeDossier(
+  dossierId: string,
+  opts: { mode: 'auto' | 'brief'; language?: string; onProgress?: (p: SynthesisProgress) => void } = { mode: 'auto' },
+): Promise<{ wrote: ComposeKind }> {
+  const onProgress = opts.onProgress ?? (() => {});
+
+  const [dossier] = await db.select().from(dossiers).where(eq(dossiers.id, dossierId));
+  if (!dossier) return { wrote: 'none' };
+
+  const language = opts.language ?? dossier.language ?? 'fr';
+
+  const allRows = await db.select().from(factsTable).where(eq(factsTable.dossierId, dossierId));
+  const hasFacts = allRows.length > 0;
+  const hasBrief = !!dossier.brief && opts.mode === 'auto'; // mode 'brief' forces regeneration
+
+  const cutoff = await newFactsCutoff(dossierId, dossier.briefGeneratedAt ?? null);
+  const newRows = cutoff ? allRows.filter((r) => r.createdAt > cutoff) : allRows;
+  const hasNewFacts = newRows.length > 0;
+
+  const kind =
+    opts.mode === 'brief'
+      ? hasFacts ? 'brief' : 'none'
+      : decideCompose({ hasFacts, hasBrief, hasNewFacts });
+
+  if (kind === 'none') {
+    onProgress({ type: 'synthesis', phase: 'brief', state: 'skip' });
+    return { wrote: 'none' };
+  }
+
+  const client = selectLlmClient(process.env as Record<string, string | undefined>);
+  const subject = [dossier.name, dossier.intent].filter(Boolean).join(' — ');
+
+  if (kind === 'brief') {
+    onProgress({ type: 'synthesis', phase: 'brief', state: 'start' });
+    const groups = groupFactsByHost(allRows.map(toFact));
+    const res = await client.complete(buildBriefPrompt(subject, language, groups), { jsonSchema: BRIEF_SCHEMA });
+    const { brief, sourceNotes } = parseBrief(res.text);
+    if (brief) await setBrief(dossierId, brief, sourceNotes);
+    onProgress({ type: 'synthesis', phase: 'brief', state: 'done' });
+    return { wrote: 'brief' };
+  }
+
+  // update
+  onProgress({ type: 'synthesis', phase: 'update', state: 'start' });
+  const groups = groupFactsByHost(newRows.map(toFact));
+  const res = await client.complete(
+    buildUpdatePrompt(subject, language, dossier.brief ?? '', groups),
+    { jsonSchema: UPDATE_SCHEMA },
+  );
+  const { body, sourceNotes } = parseUpdate(res.text);
+  if (body) await addUpdate(dossierId, body, newRows.length, sourceNotes);
+  onProgress({ type: 'synthesis', phase: 'update', state: 'done' });
+  return { wrote: 'update' };
 }

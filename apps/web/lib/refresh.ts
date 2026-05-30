@@ -8,6 +8,7 @@ import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
 import { insertFacts } from './dossiers';
+import type { SynthesisProgress } from './synthesis';
 
 // --- Relevance tuning knobs (calibrated empirically; see R3) ---
 const CANDIDATE_SCORE_FLOOR = 0.4;    // drop weaker results — only applied to scored (Tavily) candidates
@@ -20,6 +21,8 @@ export type RefreshProgress =
   | { type: 'facts'; sourceLabel: string; added: number; total: number }
   | { type: 'source-error'; label: string; message: string }
   | { type: 'done'; total: number };
+
+export type StreamProgress = RefreshProgress | SynthesisProgress;
 
 type SourceRow = typeof sources.$inferSelect;
 
@@ -43,7 +46,7 @@ function topFactsPerUrl(urlFacts: Fact[], n: number): Fact[] {
 export async function refreshDossier(
   dossierId: string,
   opts: { force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void } = {},
-): Promise<{ total: number }> {
+): Promise<{ total: number; added: number }> {
   registerAllAdapters();
   const onProgress = opts.onProgress ?? (() => {});
   const lang = opts.language ?? 'fr';
@@ -58,6 +61,7 @@ export async function refreshDossier(
   const seen = new Set(existing.map((e) => dedupKey(e)));
   const seenUrls = new Set(existing.map((e) => e.sourceUrl));
   let total = seen.size;
+  let added = 0;
 
   for (const src of srcRows) {
     const needs = src.kind === 'standing' || !src.lastExtractedAt || opts.force;
@@ -102,6 +106,7 @@ export async function refreshDossier(
       // group fresh facts by their real sourceUrl is unnecessary — store under this source row
       await insertFacts(dossierId, src.id, fresh);
       total += fresh.length;
+      added += fresh.length;
       await db.update(sources).set({ lastExtractedAt: new Date() }).where(eq(sources.id, src.id));
       onProgress({ type: 'facts', sourceLabel: src.label ?? src.connector, added: fresh.length, total });
     } catch (e) {
@@ -112,5 +117,5 @@ export async function refreshDossier(
 
   await db.update(dossiers).set({ refreshedAt: new Date(), status: 'active' }).where(eq(dossiers.id, dossierId));
   onProgress({ type: 'done', total });
-  return { total };
+  return { total, added };
 }

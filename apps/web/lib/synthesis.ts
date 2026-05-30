@@ -1,9 +1,7 @@
 import type { Fact } from '@veille/core';
 import { eq, desc } from 'drizzle-orm';
-import { db } from './db';
 import { dossiers, facts as factsTable, dossierUpdates } from './db/schema';
 import { selectLlmClient } from '@veille/core';
-import { setBrief, addUpdate } from './dossiers';
 
 export type SourceGroup = { host: string; facts: Fact[] };
 
@@ -142,6 +140,7 @@ function toFact(row: typeof factsTable.$inferSelect): Fact {
 
 /** Returns the cutoff time for "new" facts in an update: latest update, else brief time. */
 async function newFactsCutoff(dossierId: string, briefGeneratedAt: Date | null): Promise<Date | null> {
+  const { db } = await import('./db');
   const [u] = await db
     .select({ at: dossierUpdates.createdAt })
     .from(dossierUpdates)
@@ -156,6 +155,9 @@ export async function composeDossier(
   opts: { mode: 'auto' | 'brief'; language?: string; onProgress?: (p: SynthesisProgress) => void } = { mode: 'auto' },
 ): Promise<{ wrote: ComposeKind }> {
   const onProgress = opts.onProgress ?? (() => {});
+
+  const { db } = await import('./db');
+  const { setBrief, addUpdate } = await import('./dossiers');
 
   const [dossier] = await db.select().from(dossiers).where(eq(dossiers.id, dossierId));
   if (!dossier) return { wrote: 'none' };

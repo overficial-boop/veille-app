@@ -220,6 +220,7 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
   // action returns void, so a failure simply leaves the brief unchanged (no toast).
   function rewriteBrief() {
     if (isPending || running) return;
+    setSynth(null);
     startTransition(() => {
       regenerateBriefAction(slug);
     });
@@ -236,7 +237,7 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
               variant={key === template ? 'default' : 'outline'}
               size="sm"
               onClick={() => switchTemplate(key)}
-              disabled={isPending}
+              disabled={isPending || running}
               aria-pressed={key === template}
             >
               {TEMPLATE_LABELS[key]}
@@ -254,7 +255,7 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
             <PenLine className={cn('h-3.5 w-3.5', isPending && 'animate-pulse')} />
             {isPending ? 'Réécriture…' : 'Réécrire la synthèse'}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => run(`/api/dossiers/${slug}/refresh`)} disabled={running}>
+          <Button variant="outline" size="sm" onClick={() => run(`/api/dossiers/${slug}/refresh`)} disabled={running || isPending}>
             <RefreshCw className={cn('h-3.5 w-3.5', running && 'animate-spin')} />
             {running ? 'Rafraîchissement…' : 'Rafraîchir'}
           </Button>

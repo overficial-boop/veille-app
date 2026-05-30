@@ -124,6 +124,7 @@ export type SynthesisProgress = {
   state: 'start' | 'done' | 'skip';
 };
 
+// jsonb columns (provenance, extractedBy) are typed `unknown` by Drizzle; cast back to the Fact shape the insert path guarantees.
 function toFact(row: typeof factsTable.$inferSelect): Fact {
   return {
     id: row.id,
@@ -140,6 +141,7 @@ function toFact(row: typeof factsTable.$inferSelect): Fact {
 
 /** Returns the cutoff time for "new" facts in an update: latest update, else brief time. */
 async function newFactsCutoff(dossierId: string, briefGeneratedAt: Date | null): Promise<Date | null> {
+  // lazy: ./db eagerly validates env at module load — keep this module's pure helpers test-loadable
   const { db } = await import('./db');
   const [u] = await db
     .select({ at: dossierUpdates.createdAt })
@@ -156,8 +158,8 @@ export async function composeDossier(
 ): Promise<{ wrote: ComposeKind }> {
   const onProgress = opts.onProgress ?? (() => {});
 
+  // lazy: ./db eagerly validates env at module load — keep this module's pure helpers test-loadable
   const { db } = await import('./db');
-  const { setBrief, addUpdate } = await import('./dossiers');
 
   const [dossier] = await db.select().from(dossiers).where(eq(dossiers.id, dossierId));
   if (!dossier) return { wrote: 'none' };
@@ -166,9 +168,11 @@ export async function composeDossier(
 
   const allRows = await db.select().from(factsTable).where(eq(factsTable.dossierId, dossierId));
   const hasFacts = allRows.length > 0;
-  const hasBrief = !!dossier.brief && opts.mode === 'auto'; // mode 'brief' forces regeneration
+  const briefExists = !!dossier.brief;
+  // In 'brief' mode we force regeneration, so treat the brief as absent for the decision.
+  const hasBrief = briefExists && opts.mode === 'auto';
 
-  const cutoff = await newFactsCutoff(dossierId, dossier.briefGeneratedAt ?? null);
+  const cutoff = opts.mode !== 'brief' ? await newFactsCutoff(dossierId, dossier.briefGeneratedAt ?? null) : null;
   const newRows = cutoff ? allRows.filter((r) => r.createdAt > cutoff) : allRows;
   const hasNewFacts = newRows.length > 0;
 
@@ -178,9 +182,11 @@ export async function composeDossier(
       : decideCompose({ hasFacts, hasBrief, hasNewFacts });
 
   if (kind === 'none') {
-    onProgress({ type: 'synthesis', phase: 'brief', state: 'skip' });
+    onProgress({ type: 'synthesis', phase: briefExists ? 'update' : 'brief', state: 'skip' });
     return { wrote: 'none' };
   }
+
+  const { setBrief, addUpdate } = await import('./dossiers');
 
   const client = selectLlmClient(process.env as Record<string, string | undefined>);
   const subject = [dossier.name, dossier.intent].filter(Boolean).join(' — ');

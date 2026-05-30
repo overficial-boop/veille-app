@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { getDossier, listSources, listFacts, listUpdates } from '@/lib/dossiers';
-import { resolveTemplate } from '@/components/templates/registry';
 import { formatDateFr } from '@/components/templates/types';
 import { Prose } from '@/components/prose';
 import { BySource } from '@/components/templates/by-source';
@@ -27,8 +26,6 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
     listFacts(dossier.id),
     listUpdates(dossier.id),
   ]);
-  const key = resolveTemplate(dossier.template);
-
   return (
     <main className="mx-auto max-w-3xl p-6 sm:p-10">
       <header className="border-b border-[color:var(--color-border)] pb-6">
@@ -60,8 +57,6 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
       <DossierRuntime
         slug={dossier.slug}
         status={dossier.status}
-        template={key}
-        factCount={facts.length}
         sources={sources.map((s) => ({
           id: s.id,
           connector: s.connector,

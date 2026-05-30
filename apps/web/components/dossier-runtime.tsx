@@ -19,7 +19,6 @@ import {
 import { cn } from '@/lib/utils';
 import type { SynthesisProgress } from '@/lib/synthesis';
 import {
-  setTemplateAction,
   addSourceAction,
   removeSourceAction,
   regenerateBriefAction,
@@ -38,8 +37,6 @@ type Progress =
   | { type: 'done'; total: number }
   | SynthesisProgress;
 
-type TemplateKey = 'feed' | 'profile' | 'chronology';
-
 type SourceLite = {
   id: string;
   connector: string;
@@ -50,8 +47,6 @@ type SourceLite = {
 type Props = {
   slug: string;
   status: string;
-  template: TemplateKey;
-  factCount: number;
   sources: SourceLite[];
 };
 
@@ -69,15 +64,7 @@ type SynthLine =
   | { state: 'running'; phase: 'brief' | 'update' }
   | { state: 'error'; message: string };
 
-const TEMPLATE_LABELS: Record<TemplateKey, string> = {
-  feed: 'Fil',
-  profile: 'Profil',
-  chronology: 'Chronologie',
-};
-
-const TEMPLATE_ORDER: TemplateKey[] = ['feed', 'profile', 'chronology'];
-
-export function DossierRuntime({ slug, status, template, sources }: Props) {
+export function DossierRuntime({ slug, status, sources }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
 
@@ -208,13 +195,6 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
     (phase === 'done' && (lines.length > 0 || synth !== null)) ||
     phase === 'error';
 
-  function switchTemplate(key: TemplateKey) {
-    if (key === template || isPending) return;
-    startTransition(() => {
-      setTemplateAction(slug, key);
-    });
-  }
-
   // Owner-scoped brief regeneration. The action revalidates the dossier path, so
   // the page re-renders with the new brief once the transition resolves; the
   // action returns void, so a failure simply leaves the brief unchanged (no toast).
@@ -228,38 +208,21 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
 
   return (
     <section className="mt-6">
-      {/* Toolbar: template switcher + refresh */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5" role="group" aria-label="Présentation">
-          {TEMPLATE_ORDER.map((key) => (
-            <Button
-              key={key}
-              variant={key === template ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => switchTemplate(key)}
-              disabled={isPending || running}
-              aria-pressed={key === template}
-            >
-              {TEMPLATE_LABELS[key]}
-            </Button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={rewriteBrief}
-            disabled={isPending || running}
-          >
-            <PenLine className={cn('h-3.5 w-3.5', isPending && 'animate-pulse')} />
-            {isPending ? 'Réécriture…' : 'Réécrire la synthèse'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => run(`/api/dossiers/${slug}/refresh`)} disabled={running || isPending}>
-            <RefreshCw className={cn('h-3.5 w-3.5', running && 'animate-spin')} />
-            {running ? 'Rafraîchissement…' : 'Rafraîchir'}
-          </Button>
-        </div>
+      {/* Toolbar: action buttons */}
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={rewriteBrief}
+          disabled={isPending || running}
+        >
+          <PenLine className={cn('h-3.5 w-3.5', isPending && 'animate-pulse')} />
+          {isPending ? 'Réécriture…' : 'Réécrire la synthèse'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => run(`/api/dossiers/${slug}/refresh`)} disabled={running || isPending}>
+          <RefreshCw className={cn('h-3.5 w-3.5', running && 'animate-spin')} />
+          {running ? 'Rafraîchissement…' : 'Rafraîchir'}
+        </Button>
       </div>
 
       {/* Live assembly / refresh progress */}

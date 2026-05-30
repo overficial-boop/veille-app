@@ -118,11 +118,9 @@ export function buildUpdatePrompt(subject: string, language: string, brief: stri
 // Orchestrator
 // ---------------------------------------------------------------------------
 
-export type SynthesisProgress = {
-  type: 'synthesis';
-  phase: 'brief' | 'update';
-  state: 'start' | 'done' | 'skip';
-};
+export type SynthesisProgress =
+  | { type: 'synthesis'; phase: 'brief' | 'update'; state: 'start' | 'done' | 'skip' }
+  | { type: 'synthesis-error'; message: string };
 
 // jsonb columns (provenance, extractedBy) are typed `unknown` by Drizzle; cast back to the Fact shape the insert path guarantees.
 function toFact(row: typeof factsTable.$inferSelect): Fact {

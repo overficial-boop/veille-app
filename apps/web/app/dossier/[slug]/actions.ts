@@ -46,6 +46,6 @@ export async function regenerateBriefAction(slug: string): Promise<void> {
   if (!id) return;
   const dossier = await getDossier(id, slug);
   if (!dossier) return;
-  await composeDossier(dossier.id, { mode: 'brief' });
+  await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr' });
   revalidatePath(`/dossier/${slug}`);
 }

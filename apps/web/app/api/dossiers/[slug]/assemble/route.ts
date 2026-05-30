@@ -22,7 +22,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
       try {
         const { added } = await refreshDossier(dossier.id, { language: dossier.language ?? 'fr', onProgress: send });
         if (added > 0 || !dossier.brief) {
-          await composeDossier(dossier.id, { mode: 'auto', language: dossier.language ?? 'fr', onProgress: send });
+          try {
+            await composeDossier(dossier.id, { mode: 'auto', language: dossier.language ?? 'fr', onProgress: send });
+          } catch (e) {
+            send({ type: 'synthesis-error', message: e instanceof Error ? e.message : String(e) });
+          }
         }
       } catch (e) {
         send({ type: 'source-error', label: 'refresh', message: e instanceof Error ? e.message : String(e) });

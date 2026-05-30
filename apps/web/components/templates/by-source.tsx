@@ -30,7 +30,7 @@ export function BySource({ dossier, facts }: TemplateProps) {
           {notes[g.host] && (
             <p className="text-muted-foreground mt-0.5 mb-2 text-sm">{notes[g.host]}</p>
           )}
-          <div className="divide-border divide-y">
+          <div className="divide-border mt-2 divide-y">
             {g.facts.map((f) => (
               <FactRow key={f.id} fact={f} />
             ))}

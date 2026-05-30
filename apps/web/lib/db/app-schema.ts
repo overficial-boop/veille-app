@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, real, uuid, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, real, uuid, uniqueIndex, integer } from 'drizzle-orm/pg-core';
 import { user } from './auth-schema';
 
 export const dossiers = pgTable('dossiers', {
@@ -15,6 +15,9 @@ export const dossiers = pgTable('dossiers', {
   slug: text('slug').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   refreshedAt: timestamp('refreshed_at', { withTimezone: true }),
+  brief: text('brief'),
+  briefGeneratedAt: timestamp('brief_generated_at', { withTimezone: true }),
+  sourceNotes: jsonb('source_notes'),
 }, (t) => [uniqueIndex('dossiers_owner_slug_idx').on(t.ownerId, t.slug)]);
 
 export const sources = pgTable('sources', {
@@ -27,6 +30,14 @@ export const sources = pgTable('sources', {
   input: jsonb('input').notNull(),
   label: text('label'),
   lastExtractedAt: timestamp('last_extracted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const dossierUpdates = pgTable('dossier_updates', {
+  id: uuid('id').primaryKey(),
+  dossierId: uuid('dossier_id').notNull().references(() => dossiers.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  factCount: integer('fact_count').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

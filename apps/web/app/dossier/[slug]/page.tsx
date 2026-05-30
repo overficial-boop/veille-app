@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
-import { getDossier, listSources, listFacts } from '@/lib/dossiers';
-import { TEMPLATES, resolveTemplate } from '@/components/templates/registry';
+import { getDossier, listSources, listFacts, listUpdates } from '@/lib/dossiers';
+import { resolveTemplate } from '@/components/templates/registry';
 import { formatDateFr } from '@/components/templates/types';
+import { Prose } from '@/components/prose';
+import { BySource } from '@/components/templates/by-source';
 import { DossierRuntime } from '@/components/dossier-runtime';
 
 export const dynamic = 'force-dynamic';
@@ -20,9 +22,12 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
   if (!session) redirect('/sign-in');
   const dossier = await getDossier(session.user.id, slug);
   if (!dossier) notFound();
-  const [sources, facts] = await Promise.all([listSources(dossier.id), listFacts(dossier.id)]);
+  const [sources, facts, updates] = await Promise.all([
+    listSources(dossier.id),
+    listFacts(dossier.id),
+    listUpdates(dossier.id),
+  ]);
   const key = resolveTemplate(dossier.template);
-  const { Component } = TEMPLATES[key];
 
   return (
     <main className="mx-auto max-w-3xl p-6 sm:p-10">
@@ -65,9 +70,50 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
         }))}
       />
 
-      <div className="mt-8">
-        <Component dossier={dossier} facts={facts} />
-      </div>
+      {/* Brief — the synthesis, the first thing the reader sees */}
+      {dossier.brief ? (
+        <section className="mt-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 shadow-sm sm:p-8">
+          <Prose className="text-[color:var(--color-foreground)]">{dossier.brief}</Prose>
+        </section>
+      ) : (
+        <p className="text-[color:var(--color-muted-foreground)] mt-8 text-sm">
+          Synthèse en attente — lancez l&apos;assemblage.
+        </p>
+      )}
+
+      {/* Update log — dated "what's new" notes, newest first */}
+      {updates.length > 0 ? (
+        <section className="mt-10">
+          <h2 className="font-display text-foreground text-xl">Mises à jour</h2>
+          <div className="mt-4 space-y-8">
+            {updates.map((u) => (
+              <article key={u.id}>
+                <time
+                  dateTime={new Date(u.createdAt).toISOString()}
+                  className="text-[color:var(--color-muted-foreground)] text-xs"
+                >
+                  {formatDateFr(new Date(u.createdAt))}
+                </time>
+                <Prose className="text-[color:var(--color-foreground)] mt-1.5">{u.body}</Prose>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Sources & evidence — collapsed by default; by-source is the evidence lens */}
+      <details className="group mt-10 border-t border-[color:var(--color-border)] pt-6">
+        <summary className="text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)] flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium transition-colors">
+          <span className="transition-transform group-open:rotate-90" aria-hidden>
+            ▸
+          </span>
+          Sources et faits
+          <span className="text-[color:var(--color-muted-foreground)]">({facts.length})</span>
+        </summary>
+        <div className="mt-6">
+          <BySource dossier={dossier} facts={facts} />
+        </div>
+      </details>
     </main>
   );
 }

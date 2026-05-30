@@ -29,6 +29,13 @@
       "when": 1780070240214,
       "tag": "0003_medical_nighthawk",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780119947818,
+      "tag": "0004_careless_riptide",
+      "breakpoints": true
     }
   ]
 }

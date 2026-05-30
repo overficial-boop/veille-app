@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { Check, Loader2, PenLine, Plus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -17,20 +17,25 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import type { SynthesisProgress } from '@/lib/synthesis';
 import {
-  setTemplateAction,
   addSourceAction,
   removeSourceAction,
+  regenerateBriefAction,
 } from '@/app/dossier/[slug]/actions';
 
-/** Mirrors the server-side RefreshProgress union (lib/refresh.ts). Defined locally so the client bundle never imports the engine. */
+/**
+ * Mirrors the server-side StreamProgress union (lib/refresh.ts): refresh frames
+ * plus the synthesis frames the SSE routes append AFTER refresh completes, over
+ * the same channel. The refresh half is duplicated locally so the client bundle
+ * never imports the engine; the synthesis half is a pure type, safe to import.
+ */
 type Progress =
   | { type: 'source-start'; label: string }
   | { type: 'facts'; sourceLabel: string; added: number; total: number }
   | { type: 'source-error'; label: string; message: string }
-  | { type: 'done'; total: number };
-
-type TemplateKey = 'feed' | 'profile' | 'chronology';
+  | { type: 'done'; total: number }
+  | SynthesisProgress;
 
 type SourceLite = {
   id: string;
@@ -42,8 +47,6 @@ type SourceLite = {
 type Props = {
   slug: string;
   status: string;
-  template: TemplateKey;
-  factCount: number;
   sources: SourceLite[];
 };
 
@@ -56,20 +59,18 @@ type ProgressLine = {
   added?: number;
 };
 
-const TEMPLATE_LABELS: Record<TemplateKey, string> = {
-  feed: 'Fil',
-  profile: 'Profil',
-  chronology: 'Chronologie',
-};
+/** The synthesis (brief/update) step — a single live line, distinct from the source rows. */
+type SynthLine =
+  | { state: 'running'; phase: 'brief' | 'update' }
+  | { state: 'error'; message: string };
 
-const TEMPLATE_ORDER: TemplateKey[] = ['feed', 'profile', 'chronology'];
-
-export function DossierRuntime({ slug, status, template, sources }: Props) {
+export function DossierRuntime({ slug, status, sources }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
 
   const [phase, setPhase] = React.useState<Phase>('idle');
   const [lines, setLines] = React.useState<ProgressLine[]>([]);
+  const [synth, setSynth] = React.useState<SynthLine | null>(null);
   const [total, setTotal] = React.useState(0);
 
   const esRef = React.useRef<EventSource | null>(null);
@@ -92,6 +93,7 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
       doneRef.current = false;
       setPhase('running');
       setLines([]);
+      setSynth(null);
       setTotal(0);
 
       const es = new EventSource(path);
@@ -133,21 +135,39 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
             return next;
           });
         } else if (p.type === 'done') {
+          // Refresh finished — but the SSE routes keep the stream open to append
+          // synthesis frames next. Record the tally and mark done for the close
+          // handler; do NOT tear down here, or those frames would be lost. The
+          // terminal transition (and router.refresh) happens when the server
+          // closes the stream (onerror, below).
           doneRef.current = true;
           setTotal(p.total);
-          closeStream();
-          setPhase('done');
-          router.refresh();
+        } else if (p.type === 'synthesis') {
+          if (p.state === 'start') {
+            setSynth({ state: 'running', phase: p.phase });
+          } else {
+            // done | skip — the brief/update is written (or nothing was needed)
+            setSynth(null);
+          }
+        } else if (p.type === 'synthesis-error') {
+          // Facts are already saved; a failed synthesis is a soft notice, not a crash.
+          setSynth({ state: 'error', message: p.message });
         }
       };
 
       es.onerror = () => {
-        // The server closes the connection right after the `done` frame, which
-        // also fires onerror. The doneRef guard distinguishes a normal close
-        // from a real failure and prevents EventSource auto-reconnect loops.
-        if (doneRef.current) return;
+        // The server closes the connection after the final frame (the `done`
+        // frame, then any synthesis frames), which surfaces here as onerror.
+        // Always close to prevent EventSource auto-reconnect loops; the doneRef
+        // guard tells a normal completion from a real failure. On normal close
+        // we refresh server data so the new brief / update / facts render.
         closeStream();
-        setPhase('error');
+        if (doneRef.current) {
+          setPhase('done');
+          router.refresh();
+        } else {
+          setPhase('error');
+        }
       };
     },
     [closeStream, router],
@@ -170,35 +190,36 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
   }, []);
 
   const running = phase === 'running';
-  const showPanel = phase === 'running' || (phase === 'done' && lines.length > 0) || phase === 'error';
+  const showPanel =
+    phase === 'running' ||
+    (phase === 'done' && (lines.length > 0 || synth !== null)) ||
+    phase === 'error';
 
-  function switchTemplate(key: TemplateKey) {
-    if (key === template || isPending) return;
+  // Owner-scoped brief regeneration. The action revalidates the dossier path, so
+  // the page re-renders with the new brief once the transition resolves; the
+  // action returns void, so a failure simply leaves the brief unchanged (no toast).
+  function rewriteBrief() {
+    if (isPending || running) return;
+    setSynth(null);
     startTransition(() => {
-      setTemplateAction(slug, key);
+      regenerateBriefAction(slug);
     });
   }
 
   return (
     <section className="mt-6">
-      {/* Toolbar: template switcher + refresh */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5" role="group" aria-label="Présentation">
-          {TEMPLATE_ORDER.map((key) => (
-            <Button
-              key={key}
-              variant={key === template ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => switchTemplate(key)}
-              disabled={isPending}
-              aria-pressed={key === template}
-            >
-              {TEMPLATE_LABELS[key]}
-            </Button>
-          ))}
-        </div>
-
-        <Button variant="outline" size="sm" onClick={() => run(`/api/dossiers/${slug}/refresh`)} disabled={running}>
+      {/* Toolbar: action buttons */}
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={rewriteBrief}
+          disabled={isPending || running}
+        >
+          <PenLine className={cn('h-3.5 w-3.5', isPending && 'animate-pulse')} />
+          {isPending ? 'Réécriture…' : 'Réécrire la synthèse'}
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => run(`/api/dossiers/${slug}/refresh`)} disabled={running || isPending}>
           <RefreshCw className={cn('h-3.5 w-3.5', running && 'animate-spin')} />
           {running ? 'Rafraîchissement…' : 'Rafraîchir'}
         </Button>
@@ -258,6 +279,33 @@ export function DossierRuntime({ slug, status, template, sources }: Props) {
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {synth ? (
+            <div
+              className={cn(
+                'animate-fact-in flex items-center gap-2.5 text-sm',
+                lines.length > 0 ? 'mt-2' : 'mt-4',
+              )}
+            >
+              {synth.state === 'running' ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[color:var(--color-muted-foreground)]" />
+                  <span className="text-[color:var(--color-muted-foreground)]">
+                    {synth.phase === 'brief'
+                      ? 'Rédaction de la synthèse…'
+                      : 'Rédaction de la mise à jour…'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span className="text-[color:var(--color-muted-foreground)] italic">
+                    Synthèse indisponible — les faits sont enregistrés.
+                  </span>
+                </>
+              )}
+            </div>
           ) : null}
         </div>
       ) : null}

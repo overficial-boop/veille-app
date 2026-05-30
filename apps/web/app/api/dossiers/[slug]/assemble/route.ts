@@ -2,7 +2,8 @@
 import { type NextRequest } from 'next/server';
 import { getSession } from '@/lib/session';
 import { getDossier } from '@/lib/dossiers';
-import { refreshDossier, type RefreshProgress } from '@/lib/refresh';
+import { refreshDossier, type StreamProgress } from '@/lib/refresh';
+import { composeDossier } from '@/lib/synthesis';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,9 +18,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
-      const send = (p: RefreshProgress) => controller.enqueue(enc.encode(`data: ${JSON.stringify(p)}\n\n`));
+      const send = (p: StreamProgress) => controller.enqueue(enc.encode(`data: ${JSON.stringify(p)}\n\n`));
       try {
-        await refreshDossier(dossier.id, { language: dossier.language ?? 'fr', onProgress: send });
+        const { added } = await refreshDossier(dossier.id, { language: dossier.language ?? 'fr', onProgress: send });
+        if (added > 0 || !dossier.brief) {
+          try {
+            await composeDossier(dossier.id, { mode: 'auto', language: dossier.language ?? 'fr', onProgress: send });
+          } catch (e) {
+            send({ type: 'synthesis-error', message: e instanceof Error ? e.message : String(e) });
+          }
+        }
       } catch (e) {
         send({ type: 'source-error', label: 'refresh', message: e instanceof Error ? e.message : String(e) });
       } finally {

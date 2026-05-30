@@ -60,8 +60,8 @@ export async function refreshDossier(
   const existing = await db.select({ sourceUrl: facts.sourceUrl, text: facts.text }).from(facts).where(eq(facts.dossierId, dossierId));
   const seen = new Set(existing.map((e) => dedupKey(e)));
   const seenUrls = new Set(existing.map((e) => e.sourceUrl));
-  let total = seen.size;
-  let added = 0;
+  let total = seen.size; // running tally of all facts in the dossier (pre-existing + newly added)
+  let added = 0; // facts inserted during this refresh run only — gates synthesis in the SSE routes
 
   for (const src of srcRows) {
     const needs = src.kind === 'standing' || !src.lastExtractedAt || opts.force;

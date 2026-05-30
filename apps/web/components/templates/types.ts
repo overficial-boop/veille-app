@@ -1,4 +1,5 @@
 import type { dossiers, facts } from '@/lib/db/schema';
+import { hostOf } from '@/lib/host';
 
 export type DossierRow = typeof dossiers.$inferSelect;
 export type FactRow = typeof facts.$inferSelect;
@@ -16,11 +17,7 @@ export function factDate(f: FactRow): Date {
 
 /** "lemonde.fr" from a URL, for a compact source label. */
 export function sourceHost(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
+  return hostOf(url);
 }
 
 export function formatDateFr(d: Date): string {

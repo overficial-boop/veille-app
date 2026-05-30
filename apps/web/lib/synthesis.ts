@@ -2,12 +2,11 @@ import type { Fact } from '@veille/core';
 import { eq, desc } from 'drizzle-orm';
 import { dossiers, facts as factsTable, dossierUpdates } from './db/schema';
 import { selectLlmClient } from '@veille/core';
+import { hostOf } from './host';
 
 export type SourceGroup = { host: string; facts: Fact[] };
 
-export function hostOf(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
-}
+export { hostOf } from './host';
 
 /** Group facts by publication host, preserving first-appearance order. */
 export function groupFactsByHost(facts: Fact[]): SourceGroup[] {

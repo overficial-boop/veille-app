@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hostOf, groupFactsByHost, decideCompose, parseBrief, parseUpdate } from './synthesis';
+import { hostOf, groupFactsByHost, decideCompose, parseBrief, parseUpdate, renderGroups } from './synthesis';
 import type { Fact } from '@veille/core';
 
 const f = (sourceUrl: string, text: string, extractedAt = '2026-05-30T00:00:00.000Z'): Fact =>
@@ -27,6 +27,7 @@ describe('decideCompose', () => {
     expect(decideCompose({ hasFacts: true, hasBrief: false, hasNewFacts: true })).toBe('brief');
     expect(decideCompose({ hasFacts: true, hasBrief: true, hasNewFacts: true })).toBe('update');
     expect(decideCompose({ hasFacts: true, hasBrief: true, hasNewFacts: false })).toBe('none');
+    expect(decideCompose({ hasFacts: true, hasBrief: false, hasNewFacts: false })).toBe('brief');
   });
 });
 
@@ -46,5 +47,15 @@ describe('parseUpdate', () => {
     const r = parseUpdate('{"update":"news","newSources":[{"host":"rtl.fr","summary":"radio"}]}');
     expect(r.body).toBe('news');
     expect(r.sourceNotes).toEqual({ 'rtl.fr': 'radio' });
+  });
+});
+
+describe('renderGroups', () => {
+  it('renders groups as markdown sections', () => {
+    expect(renderGroups([{ host: 'lemonde.fr', facts: [f('https://lemonde.fr/a', 'fact1')] }]))
+      .toBe('## lemonde.fr\n- fact1');
+  });
+  it('renders an empty groups array as an empty string', () => {
+    expect(renderGroups([])).toBe('');
   });
 });

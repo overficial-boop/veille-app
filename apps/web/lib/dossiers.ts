@@ -111,19 +111,24 @@ export async function removeSource(ownerId: string, slug: string, sourceId: stri
   await db.delete(sources).where(and(eq(sources.id, sourceId), eq(sources.dossierId, dossier.id)));
 }
 
+/** Returns all updates for a dossier, newest first. */
 export async function listUpdates(dossierId: string) {
   return db.select().from(dossierUpdates).where(eq(dossierUpdates.dossierId, dossierId)).orderBy(desc(dossierUpdates.createdAt));
 }
 
+/** Replaces the brief + source_notes wholesale (on-demand brief regeneration). Not a merge — see addUpdate. */
 export async function setBrief(dossierId: string, brief: string, sourceNotes: Record<string, string>) {
   await db.update(dossiers).set({ brief, sourceNotes, briefGeneratedAt: new Date() }).where(eq(dossiers.id, dossierId));
 }
 
+/** Appends an update entry and merges newSourceNotes into dossiers.source_notes atomically. */
 export async function addUpdate(dossierId: string, body: string, factCount: number, newSourceNotes: Record<string, string>) {
-  await db.insert(dossierUpdates).values({ id: uuidv7(), dossierId, body, factCount });
-  if (Object.keys(newSourceNotes).length > 0) {
-    const [d] = await db.select({ notes: dossiers.sourceNotes }).from(dossiers).where(eq(dossiers.id, dossierId));
-    const merged = { ...((d?.notes as Record<string, string> | null) ?? {}), ...newSourceNotes };
-    await db.update(dossiers).set({ sourceNotes: merged }).where(eq(dossiers.id, dossierId));
-  }
+  await db.transaction(async (tx) => {
+    await tx.insert(dossierUpdates).values({ id: uuidv7(), dossierId, body, factCount });
+    if (Object.keys(newSourceNotes).length > 0) {
+      const [d] = await tx.select({ notes: dossiers.sourceNotes }).from(dossiers).where(eq(dossiers.id, dossierId));
+      const merged = { ...(d?.notes ?? {}), ...newSourceNotes };
+      await tx.update(dossiers).set({ sourceNotes: merged }).where(eq(dossiers.id, dossierId));
+    }
+  });
 }

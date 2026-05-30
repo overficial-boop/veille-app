@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/session';
-import { setTemplate, addSource, removeSource } from '@/lib/dossiers';
+import { setTemplate, addSource, removeSource, getDossier } from '@/lib/dossiers';
+import { composeDossier } from '@/lib/synthesis';
 
 async function ownerId(): Promise<string | null> {
   const session = await getSession();
@@ -37,5 +38,14 @@ export async function removeSourceAction(slug: string, sourceId: string): Promis
   const id = await ownerId();
   if (!id) return;
   await removeSource(id, slug, sourceId);
+  revalidatePath(`/dossier/${slug}`);
+}
+
+export async function regenerateBriefAction(slug: string): Promise<void> {
+  const id = await ownerId();
+  if (!id) return;
+  const dossier = await getDossier(id, slug);
+  if (!dossier) return;
+  await composeDossier(dossier.id, { mode: 'brief' });
   revalidatePath(`/dossier/${slug}`);
 }

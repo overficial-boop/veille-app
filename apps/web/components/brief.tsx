@@ -1,29 +1,64 @@
 'use client';
 
 import * as React from 'react';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import { Eye, EyeOff } from 'lucide-react';
-import { Prose } from './prose';
+import { proseComponents } from './prose';
 import { Eyebrow } from './veille-ui';
+import { hostOf } from '@/lib/host';
 
-/**
- * Remove inline source citations (`[text](url)`, with any leading whitespace) so the
- * default brief reads as clean prose. Our citations are bare host-name links woven into
- * the text, so de-emphasizing them via CSS isn't enough — they must be removed when hidden.
- */
-function stripSourceLinks(markdown: string): string {
-  return markdown.replace(/\s*\[[^\]]+\]\((?:[^()]|\([^()]*\))*\)/g, '');
+/** Matches a markdown link `[text](http…url)`, tolerating one level of balanced parens in the URL. */
+const LINK_RE = /\[[^\]]+\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))*)\)/g;
+
+/** Assign each cited URL a stable citation number, in first-appearance order. */
+function citationNumbers(markdown: string): Map<string, number> {
+  const map = new Map<string, number>();
+  const re = new RegExp(LINK_RE);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    const url = m[1];
+    if (!map.has(url)) map.set(url, map.size + 1);
+  }
+  return map;
 }
 
 /**
  * The dossier brief — the synthesis, rendered as a `.section` with a drop-cap.
  *
- * Default ("Afficher les sources" off): citations are stripped → clean reading.
- * On ("Sources affichées"): the full markdown renders with citation links, and the
- * `show-src` class (CSS in globals.css) gives them the accent underline.
+ * Citations render as numbered superscripts (¹²³) at the cited point, each a link to its
+ * source. By default they're invisible (clean reading); "Afficher les sources" reveals the
+ * numbers + the accent underline (the `.cite` / `.cite sup` CSS in globals.css does the toggle).
  */
 export function Brief({ brief }: { brief: string }) {
   const [showSrc, setShowSrc] = React.useState(false);
   const toggle = () => setShowSrc((v) => !v);
+
+  const numbers = React.useMemo(() => citationNumbers(brief), [brief]);
+  // Attach each citation to the preceding word (drop the space before the link) so the
+  // superscript reads as "claim¹", and the prose stays clean when the number is hidden.
+  const md = React.useMemo(() => brief.replace(/[ \t]+(?=\[[^\]]+\]\()/g, ''), [brief]);
+
+  const components = React.useMemo<Components>(
+    () => ({
+      ...proseComponents,
+      a: ({ href, children }) => {
+        const n = href ? numbers.get(href) : undefined;
+        if (!href || !n) return <>{children}</>;
+        return (
+          <a
+            className="cite"
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={hostOf(href)}
+          >
+            <sup>{n}</sup>
+          </a>
+        );
+      },
+    }),
+    [numbers],
+  );
 
   return (
     <section className="section" style={{ marginTop: 0 }}>
@@ -46,7 +81,7 @@ export function Brief({ brief }: { brief: string }) {
       </div>
 
       <div className={'brief-prose' + (showSrc ? ' show-src' : '')}>
-        <Prose>{showSrc ? brief : stripSourceLinks(brief)}</Prose>
+        <ReactMarkdown components={components}>{md}</ReactMarkdown>
       </div>
     </section>
   );

@@ -49,7 +49,9 @@ Discovery folds into the source loop with **auto-accept** (no proposal/triage qu
 Dev uses the VPS Postgres (Postgres 16 on `root@178.104.52.131`, localhost-only). Role `veille`, database `veille_dev` (prod gets `veille_prod` at deploy). It is **not** exposed publicly — connect through a tunnel:
 
 ```
-ssh -L 15432:localhost:5432 root@178.104.52.131 -N      # keep open during dev
+# Auto-reconnecting (keepalives survive idle drops; relaunches on sleep/wake) — preferred:
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-tunnel.ps1
+# one-shot (dies on drop, no keepalive): ssh -L 15432:localhost:5432 root@178.104.52.131 -N
 ```
 
 `DATABASE_URL` points at `localhost:15432/veille_dev`. Tunnel port **15432** is deliberate: the dev machine already runs **local Postgres 16 on `:5432` and Postgres 18 on `:5433`**, so the tunnel avoids both. The local Postgres is **not** used for dev — its superuser password is unknown/unsaved (no `pgpass.conf`), and resetting it needs admin + a service restart (not worth it). Claude opens the tunnel itself during its own DB work (background `ssh -L`); a human only needs to run it to drive the app standalone without a Claude session.

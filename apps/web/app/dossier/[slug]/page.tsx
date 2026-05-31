@@ -4,8 +4,9 @@ import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/session';
 import { getDossier, listSources, listFacts, listUpdates } from '@/lib/dossiers';
 import { formatDateFr } from '@/components/templates/types';
-import { Prose } from '@/components/prose';
 import { Brief } from '@/components/brief';
+import { Journal } from '@/components/journal';
+import { CitationsProvider } from '@/components/citations-context';
 import { BySource } from '@/components/templates/by-source';
 import { DossierRuntime } from '@/components/dossier-runtime';
 import { sourceTarget } from '@/lib/source-input';
@@ -88,42 +89,32 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
 
           {/* MAIN — brief, journal, evidence */}
           <main style={{ minWidth: 0 }}>
-            {/* Brief — the synthesis, the first thing the reader sees */}
-            {dossier.brief ? (
-              <Brief brief={dossier.brief} citations={citations} />
-            ) : (
-              <section className="section" style={{ marginTop: 0 }}>
-                <div className="section-head">
-                  <div className="ttl">
-                    <Eyebrow>Le brief</Eyebrow>
-                    <h2 style={{ marginTop: '.1rem' }}>Situation actuelle</h2>
-                  </div>
-                </div>
-                <div className="brief-empty">Synthèse en attente — lancez l&apos;assemblage.</div>
-              </section>
-            )}
-
-            {/* Journal — dated "what's new" notes, newest first */}
-            {updates.length > 0 ? (
-              <section className="section">
-                <div className="section-head">
-                  <div className="ttl">
-                    <Eyebrow>Journal</Eyebrow>
-                    <h2 style={{ marginTop: '.1rem' }}>Mises à jour</h2>
-                  </div>
-                </div>
-                <div className="journal">
-                  {updates.map((u) => (
-                    <div key={u.id} className="update fade">
-                      <div className="when">{formatDateFr(new Date(u.createdAt))}</div>
-                      <div className="body">
-                        <Prose>{u.body}</Prose>
-                      </div>
+            <CitationsProvider>
+              {/* Brief — the synthesis, the first thing the reader sees */}
+              {dossier.brief ? (
+                <Brief brief={dossier.brief} citations={citations} />
+              ) : (
+                <section className="section" style={{ marginTop: 0 }}>
+                  <div className="section-head">
+                    <div className="ttl">
+                      <Eyebrow>Le brief</Eyebrow>
+                      <h2 style={{ marginTop: '.1rem' }}>Situation actuelle</h2>
                     </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+                  </div>
+                  <div className="brief-empty">Synthèse en attente — lancez l&apos;assemblage.</div>
+                </section>
+              )}
+
+              {/* Journal — dated "what's new" notes, newest first */}
+              <Journal
+                entries={updates.map((u) => ({
+                  id: u.id,
+                  when: formatDateFr(new Date(u.createdAt)),
+                  body: u.body,
+                }))}
+                citations={citations}
+              />
+            </CitationsProvider>
 
             {/* Sources & evidence — auditable evidence, grouped by publication */}
             <section className="evidence">

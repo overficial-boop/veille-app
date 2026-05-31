@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { youtubeFeedFromInput, sourceSpecToRow } from './source-input';
+import { youtubeFeedFromInput, sourceSpecToRow, extractFeedTitle } from './source-input';
 
 describe('youtubeFeedFromInput', () => {
   const feed = (id: string) => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`;
@@ -18,6 +18,24 @@ describe('youtubeFeedFromInput', () => {
     expect(youtubeFeedFromInput('https://www.youtube.com/@mkbhd')).toBeNull();
     expect(youtubeFeedFromInput('@mkbhd')).toBeNull();
     expect(youtubeFeedFromInput('le procès du siècle')).toBeNull();
+  });
+});
+
+describe('extractFeedTitle', () => {
+  it('returns the feed/channel title (first <title>), not an item title', () => {
+    const xml = `<?xml version="1.0"?><rss><channel><title>Le Monde — Une</title><item><title><![CDATA[EN DIRECT : actu]]></title></item></channel></rss>`;
+    expect(extractFeedTitle(xml)).toBe('Le Monde — Une');
+  });
+  it('strips a CDATA wrapper on the feed title', () => {
+    const xml = `<feed><title><![CDATA[The Studio]]></title><entry><title>vid</title></entry></feed>`;
+    expect(extractFeedTitle(xml)).toBe('The Studio');
+  });
+  it('keeps square brackets in the title', () => {
+    const xml = `<rss><channel><title>[Podcast] Tech</title></channel></rss>`;
+    expect(extractFeedTitle(xml)).toBe('[Podcast] Tech');
+  });
+  it('returns undefined when there is no title', () => {
+    expect(extractFeedTitle('<rss><channel></channel></rss>')).toBeUndefined();
   });
 });
 

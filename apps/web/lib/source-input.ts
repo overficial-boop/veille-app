@@ -50,6 +50,16 @@ export function sourceSpecToRow(
   }
 }
 
+/** PURE. The feed/channel title = the first <title> element (precedes item titles in RSS & Atom),
+ *  with an optional CDATA wrapper stripped. Returns undefined if absent/empty. */
+export function extractFeedTitle(xml: string): string | undefined {
+  const m = xml.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  if (!m) return undefined;
+  const inner = m[1].replace(/^\s*<!\[CDATA\[/, '').replace(/\]\]>\s*$/, '');
+  const t = inner.trim();
+  return t || undefined;
+}
+
 /** Fetch a feed URL, confirm it parses as a feed, and return its <title> for labelling. Server-safe. */
 export async function fetchFeedTitle(feedUrl: string): Promise<{ ok: true; title?: string } | { ok: false; error: string }> {
   try {
@@ -60,9 +70,7 @@ export async function fetchFeedTitle(feedUrl: string): Promise<{ ok: true; title
     if (!res.ok) return { ok: false, error: `Le flux a répondu ${res.status}.` };
     const xml = await res.text();
     if (!/<(rss|feed|channel)[\s>]/i.test(xml)) return { ok: false, error: 'Ce lien ne ressemble pas à un flux RSS/Atom.' };
-    const m = xml.match(/<title[^>]*>\s*<!\[CDATA\[\s*([\s\S]*?)\]\]>/i)
-      ?? xml.match(/<title[^>]*>\s*([^<]+)/i);
-    return { ok: true, title: m?.[1]?.trim() };
+    return { ok: true, title: extractFeedTitle(xml) };
   } catch {
     return { ok: false, error: 'Impossible de lire ce flux.' };
   }

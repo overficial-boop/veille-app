@@ -70,7 +70,9 @@ export async function refreshDossier(
     try {
       let extracted: Fact[] = [];
       if (src.kind === 'standing') {
-        const candidates = await candidatesFor(src);
+        const cands = await candidatesFor(src);
+        // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
+        const candidates = cands.filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
         // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates
         // mutates seenUrls (marks what it returns as seen). Filtering first means only the
         // URLs we actually mine get marked seen; weaker ones can resurface on a later refresh.

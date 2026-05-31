@@ -6,12 +6,20 @@ import { Prose } from './prose';
 import { Eyebrow } from './veille-ui';
 
 /**
+ * Remove inline source citations (`[text](url)`, with any leading whitespace) so the
+ * default brief reads as clean prose. Our citations are bare host-name links woven into
+ * the text, so de-emphasizing them via CSS isn't enough — they must be removed when hidden.
+ */
+function stripSourceLinks(markdown: string): string {
+  return markdown.replace(/\s*\[[^\]]+\]\((?:[^()]|\([^()]*\))*\)/g, '');
+}
+
+/**
  * The dossier brief — the synthesis, rendered as a `.section` with a drop-cap.
  *
- * The inline source citations stay in the DOM at all times; the `show-src` class
- * (governed by CSS in globals.css) reveals or de-emphasizes their emphasis. The
- * fold-toggle just flips that class — it does not strip links. Default is the
- * clean reading view (sources de-emphasized).
+ * Default ("Afficher les sources" off): citations are stripped → clean reading.
+ * On ("Sources affichées"): the full markdown renders with citation links, and the
+ * `show-src` class (CSS in globals.css) gives them the accent underline.
  */
 export function Brief({ brief }: { brief: string }) {
   const [showSrc, setShowSrc] = React.useState(false);
@@ -38,7 +46,7 @@ export function Brief({ brief }: { brief: string }) {
       </div>
 
       <div className={'brief-prose' + (showSrc ? ' show-src' : '')}>
-        <Prose>{brief}</Prose>
+        <Prose>{showSrc ? brief : stripSourceLinks(brief)}</Prose>
       </div>
     </section>
   );

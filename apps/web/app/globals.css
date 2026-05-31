@@ -3,7 +3,7 @@
 /* ============================================================
    VEILLE — Ardoise design system
    Fonts loaded via next/font/google; variables wired below.
-   Ardoise light baked into :root; dark via prefers-color-scheme.
+   Ardoise light baked into :root; dark via [data-theme="dark"] on <html>.
    ============================================================ */
 
 /* -------- Tailwind v4 compat mapping -------- */
@@ -87,22 +87,20 @@
 /* ============================================================
    DESIGN TOKENS — dark (Ardoise dark)
    ============================================================ */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:          oklch(0.18 0.012 250);
-    --surface:     oklch(0.22 0.014 250);
-    --surface-2:   oklch(0.255 0.015 250);
-    --surface-3:   oklch(0.29 0.016 250);
-    --ink:         oklch(0.93 0.008 250);
-    --ink-2:       oklch(0.72 0.012 250);
-    --ink-3:       oklch(0.58 0.012 250);
-    --line:        oklch(0.31 0.014 250);
-    --line-2:      oklch(0.38 0.016 250);
-    --accent-default: oklch(0.68 0.13 255);
-    --accent-soft: oklch(0.3 0.04 255);
-    --danger:      oklch(0.68 0.16 24);
-    --shadow:      0 1px 2px #0006, 0 12px 32px -14px #000a;
-  }
+:root[data-theme="dark"] {
+  --bg:          oklch(0.18 0.012 250);
+  --surface:     oklch(0.22 0.014 250);
+  --surface-2:   oklch(0.255 0.015 250);
+  --surface-3:   oklch(0.29 0.016 250);
+  --ink:         oklch(0.93 0.008 250);
+  --ink-2:       oklch(0.72 0.012 250);
+  --ink-3:       oklch(0.58 0.012 250);
+  --line:        oklch(0.31 0.014 250);
+  --line-2:      oklch(0.38 0.016 250);
+  --accent-default: oklch(0.68 0.13 255);
+  --accent-soft: oklch(0.3 0.04 255);
+  --danger:      oklch(0.68 0.16 24);
+  --shadow:      0 1px 2px #0006, 0 12px 32px -14px #000a;
 }
 
 /* ============================================================
@@ -198,9 +196,7 @@ button { font-family: inherit; }
 .status-idle .dot { background: var(--ink-3); }
 .status-prep { color: oklch(0.62 0.13 70); }
 .status-prep .dot { background: oklch(0.68 0.13 70); }
-@media (prefers-color-scheme: dark) {
-  .status-active { color: oklch(0.72 0.13 150); }
-}
+[data-theme="dark"] .status-active { color: oklch(0.72 0.13 150); }
 
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
@@ -253,8 +249,7 @@ textarea.field { resize: none; line-height: 1.55; }
 
 /* ============================================================
    SCREENS & COMPONENTS
-   (ported verbatim from veille-screens.css; [data-theme="dark"]
-    rules converted to @media (prefers-color-scheme: dark))
+   (ported verbatim from veille-screens.css; dark rules use [data-theme="dark"])
    ============================================================ */
 
 /* ---------------- SIGN-IN ---------------- */
@@ -275,9 +270,7 @@ textarea.field { resize: none; line-height: 1.55; }
 .signin-msg svg { width: 17px; height: 17px; flex: none; margin-top: 1px; }
 .signin-msg.ok { color: oklch(0.5 0.12 150); border-color: color-mix(in oklch, oklch(0.6 0.14 150) 35%, var(--line)); background: color-mix(in oklch, oklch(0.6 0.14 150) 9%, var(--surface)); }
 .signin-msg.err { color: var(--danger); border-color: color-mix(in oklch, var(--danger) 35%, var(--line)); background: color-mix(in oklch, var(--danger) 8%, var(--surface)); }
-@media (prefers-color-scheme: dark) {
-  .signin-msg.ok { color: oklch(0.78 0.13 150); }
-}
+[data-theme="dark"] .signin-msg.ok { color: oklch(0.78 0.13 150); }
 
 /* ---------------- PAGE WIDTH ---------------- */
 .page { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 clamp(1rem, 4vw, 2.5rem); }
@@ -364,9 +357,7 @@ textarea.field { resize: none; line-height: 1.55; }
 .psource.empty-r .pstate { color: var(--ink-3); }
 .psource.fail .pstate { color: var(--danger); }
 .psource.run .pstate { color: var(--accent); }
-@media (prefers-color-scheme: dark) {
-  .psource.done .pstate { color: oklch(0.74 0.13 150); }
-}
+[data-theme="dark"] .psource.done .pstate { color: oklch(0.74 0.13 150); }
 .spin { width: 13px; height: 13px; flex: none; border: 1.7px solid var(--line-2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .tick { width: 14px; height: 14px; flex: none; color: oklch(0.6 0.14 150); }

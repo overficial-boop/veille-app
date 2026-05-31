@@ -4,6 +4,7 @@
  */
 import { VeilleGlyph } from './veille-ui';
 import { SignOutButton } from './sign-out-button';
+import { ThemeToggle } from './theme-toggle';
 
 interface TopBarProps {
   email: string;
@@ -18,6 +19,7 @@ export function TopBar({ email }: TopBarProps) {
       </a>
       <div className="topbar-spacer" />
       <div className="topbar-acct">
+        <ThemeToggle />
         <span className="topbar-email">{email}</span>
         <SignOutButton />
       </div>

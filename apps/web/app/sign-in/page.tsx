@@ -1,6 +1,8 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { VeilleGlyph, Btn } from '@/components/veille-ui';
+import { MailCheck, AlertCircle } from 'lucide-react';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -18,32 +20,65 @@ export default function SignIn() {
     else setSent(true);
   }
 
+  const lines = [12, 28, 44, 60, 76, 88];
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-6">
-      <h1 className="text-2xl font-semibold">Veille</h1>
-      <p className="text-muted-foreground mt-1 mb-6 text-sm">Dossiers vivants.</p>
-      {sent ? (
-        <p className="text-sm">Vérifiez votre email — un lien de connexion vous attend.</p>
-      ) : (
-        <form onSubmit={submit} className="space-y-3">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="vous@exemple.com"
-            className="border-input w-full rounded-md border px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-primary text-primary-foreground w-full rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {loading ? 'Envoi…' : 'Recevoir le lien de connexion'}
-          </button>
-          {error && <p className="text-destructive text-sm">{error}</p>}
-        </form>
-      )}
-    </main>
+    <div className="signin">
+      <div className="signin-bg" aria-hidden="true">
+        {lines.map((l) => (
+          <span key={l} className="ln" style={{ left: l + '%' }} />
+        ))}
+      </div>
+
+      <div className="signin-inner">
+        <VeilleGlyph size={46} />
+        <h1>Veille</h1>
+        <p className="sub">Dossiers vivants.</p>
+
+        {sent ? (
+          <div className="signin-msg ok">
+            <MailCheck />
+            <span>
+              Vérifiez votre email — un lien de connexion vous attend à l&apos;adresse{' '}
+              <b>{email}</b>.
+            </span>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            <input
+              className="field"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              required
+              placeholder="vous@exemple.com"
+              aria-label="Adresse email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+              }}
+            />
+            {error && (
+              <div className="signin-msg err" role="alert">
+                <AlertCircle />
+                <span>{error}</span>
+              </div>
+            )}
+            <Btn
+              variant="primary"
+              size="lg"
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? 'Envoi…' : 'Recevoir le lien de connexion'}
+            </Btn>
+            <div className="hint">
+              Connexion sans mot de passe. Un lien à usage unique vous est envoyé par email.
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }

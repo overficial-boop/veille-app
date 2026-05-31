@@ -1,17 +1,23 @@
 'use client';
-import { useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useState, useRef, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
+import { Btn } from '@/components/veille-ui';
+import { ArrowUp, Sparkles } from 'lucide-react';
+
+const EXAMPLES = [
+  'Suivre la carrière de Jules Marie au padel professionnel — résultats, classements, interviews',
+  'Chronologie de l\'affaire des écoutes politiques depuis l\'ouverture de l\'enquête',
+  'Veille sur le règlement européen de l\'IA et les positions des grands fournisseurs',
+];
 
 export function NewDossierForm() {
   const router = useRouter();
   const [intent, setIntent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function submit() {
     const value = intent.trim();
     if (!value || loading) return;
     setLoading(true);
@@ -37,32 +43,66 @@ export function NewDossierForm() {
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      void submit(e);
+      e.preventDefault();
+      void submit();
     }
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <Textarea
-        value={intent}
-        onChange={(e) => setIntent(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder="Ex. : suivre la carrière de Jules Marie au padel professionnel — ou la chronologie de l'affaire…"
-        rows={3}
-        disabled={loading}
-        aria-label="Votre intention"
-        className="resize-none"
-      />
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={loading || !intent.trim()}>
-          {loading ? 'Analyse de votre intention…' : 'Créer le dossier'}
-        </Button>
-        {error ? (
-          <span className="text-destructive text-sm">{error}</span>
-        ) : (
-          <span className="text-muted-foreground text-xs">⌘↵ pour lancer</span>
-        )}
+    <>
+      <div className="compose card">
+        <div className="compose-inner">
+          <div className="compose-label">
+            <Sparkles style={{ width: 18, height: 18, color: 'var(--accent)' }} />
+            Nouveau dossier
+          </div>
+          <div className="compose-sub">
+            Décrivez en une phrase ce que vous souhaitez suivre. Veille en compose le dossier — sources, présentation et cadence.
+          </div>
+          <textarea
+            ref={taRef}
+            className="field"
+            value={intent}
+            onChange={(e) => setIntent(e.target.value)}
+            onKeyDown={onKeyDown}
+            disabled={loading}
+            placeholder="Ex. : Suivre l'application du règlement européen sur l'IA et les positions des grands fournisseurs…"
+            rows={3}
+            aria-label="Votre intention"
+          />
+          <div className="compose-foot">
+            <span className="kbd">
+              <kbd>⌘</kbd><kbd>↵</kbd> pour lancer
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {error && <span style={{ color: 'var(--danger)', fontSize: 'var(--t-sm)' }}>{error}</span>}
+              <Btn
+                variant="primary"
+                icon={loading ? undefined : ArrowUp}
+                onClick={() => void submit()}
+                disabled={!intent.trim() || loading}
+              >
+                {loading ? 'Analyse de votre intention…' : 'Créer le dossier'}
+              </Btn>
+            </div>
+          </div>
+        </div>
       </div>
-    </form>
+
+      <div className="compose-examples">
+        {EXAMPLES.map((ex) => (
+          <button
+            key={ex}
+            className="chip"
+            onClick={() => {
+              setIntent(ex);
+              taRef.current?.focus();
+            }}
+          >
+            {ex}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }

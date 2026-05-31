@@ -1,5 +1,30 @@
 import './globals.css';
 import type { ReactNode } from 'react';
+import { Newsreader, Public_Sans, IBM_Plex_Mono } from 'next/font/google';
+
+const newsreader = Newsreader({
+  subsets: ['latin'],
+  axes: ['opsz'],
+  // weight must be omitted or 'variable' when axes are specified
+  style: ['normal', 'italic'],
+  variable: '--font-newsreader',
+  display: 'swap',
+});
+
+const publicSans = Public_Sans({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  style: ['normal', 'italic'],
+  variable: '--font-public-sans',
+  display: 'swap',
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-ibm-plex-mono',
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'Veille',
@@ -8,8 +33,23 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="fr">
-      <body>{children}</body>
+    <html
+      lang="fr"
+      className={`${newsreader.variable} ${publicSans.variable} ${ibmPlexMono.variable}`}
+      // The pre-paint script below sets `data-theme` on <html> before React
+      // hydrates, so the server markup (no attribute) and the client DOM differ.
+      // This is intentional (no-FOUC theme) — suppress the attribute mismatch warning.
+      suppressHydrationWarning
+    >
+      <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();",
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

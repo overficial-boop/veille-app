@@ -1,35 +1,75 @@
 'use client';
 
 import * as React from 'react';
-import { Prose } from './prose';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import { Eye, EyeOff } from 'lucide-react';
+import { proseComponents } from './prose';
+import { Eyebrow } from './veille-ui';
+import { hostOf } from '@/lib/host';
 
 /**
- * Remove inline source citations (`[text](url)`, with any leading whitespace) so the brief
- * reads as clean prose. The synthesis brief embeds source links inline; hiding them by default
- * keeps the brief legible, and the toggle reveals the clickable sources on demand.
+ * The dossier brief — the synthesis, rendered as a `.section` with a drop-cap.
+ *
+ * Citations render as numbered superscripts (¹²³) at the cited point, each a link to its
+ * source. By default they're invisible (clean reading); "Afficher les sources" reveals the
+ * numbers + the accent underline (the `.cite` / `.cite sup` CSS in globals.css does the toggle).
+ *
+ * `citations` is the shared map (built in the page) so brief superscripts and the evidence
+ * section use the same numbers.
  */
-function stripSourceLinks(markdown: string): string {
-  return markdown.replace(/\s*\[[^\]]+\]\((?:[^()]|\([^()]*\))*\)/g, '');
-}
+export function Brief({ brief, citations }: { brief: string; citations: Record<string, number> }) {
+  const [showSrc, setShowSrc] = React.useState(false);
+  const toggle = () => setShowSrc((v) => !v);
 
-/** The dossier brief, with a hide/show toggle for its inline source links (hidden by default). */
-export function Brief({ brief }: { brief: string }) {
-  const [showSources, setShowSources] = React.useState(false);
+  // Attach each citation to the preceding word (drop the space before the link) so the
+  // superscript reads as "claim¹", and the prose stays clean when the number is hidden.
+  const md = React.useMemo(() => brief.replace(/[ \t]+(?=\[[^\]]+\]\()/g, ''), [brief]);
+
+  const components = React.useMemo<Components>(
+    () => ({
+      ...proseComponents,
+      a: ({ href, children }) => {
+        const n = href ? citations[href] : undefined;
+        if (!href || !n) return <>{children}</>;
+        return (
+          <a
+            className="cite"
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={hostOf(href)}
+          >
+            <sup>{n}</sup>
+          </a>
+        );
+      },
+    }),
+    [citations],
+  );
+
   return (
-    <div>
-      <div className="mb-2 flex justify-end">
-        <button
-          type="button"
-          onClick={() => setShowSources((s) => !s)}
-          aria-pressed={showSources}
-          className="text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)] text-xs font-medium transition-colors"
+    <section className="section" style={{ marginTop: 0 }}>
+      <div className="section-head">
+        <div className="ttl">
+          <Eyebrow>Le brief</Eyebrow>
+          <h2 style={{ marginTop: '.1rem' }}>Situation actuelle</h2>
+        </div>
+        <div
+          className={'fold-toggle' + (showSrc ? ' on' : '')}
+          role="switch"
+          aria-checked={showSrc}
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(e) => e.key === 'Enter' && toggle()}
         >
-          {showSources ? 'Masquer les sources' : 'Afficher les sources'}
-        </button>
+          {showSrc ? <Eye /> : <EyeOff />}
+          {showSrc ? 'Sources affichées' : 'Afficher les sources'}
+        </div>
       </div>
-      <Prose className="text-[color:var(--color-foreground)]">
-        {showSources ? brief : stripSourceLinks(brief)}
-      </Prose>
-    </div>
+
+      <div className={'brief-prose' + (showSrc ? ' show-src' : '')}>
+        <ReactMarkdown components={components}>{md}</ReactMarkdown>
+      </div>
+    </section>
   );
 }

@@ -23,6 +23,21 @@ import {
   removeSourceAction,
   regenerateBriefAction,
 } from '@/app/dossier/[slug]/actions';
+import type { AddSourceType } from '@/lib/source-input';
+
+const ADD_SOURCE_OPTIONS: { type: AddSourceType; label: string; placeholder: string }[] = [
+  { type: 'web', label: 'Une page web (URL)', placeholder: 'https://exemple.fr/article' },
+  { type: 'search', label: 'Une recherche permanente', placeholder: 'Sujet ou requête à suivre' },
+  { type: 'rss', label: 'Un flux RSS (blog, magazine)', placeholder: 'https://exemple.fr/feed' },
+  { type: 'youtube', label: 'Une chaîne YouTube', placeholder: 'https://youtube.com/@chaine' },
+];
+
+function sourceTypeLabel(connector: string, source?: string): string {
+  if (connector === 'web') return 'Page web';
+  if (connector === 'tavily') return 'Recherche';
+  if (connector === 'rss') return source === 'youtube' ? 'Chaîne YouTube' : 'Flux RSS';
+  return connector;
+}
 
 /**
  * Mirrors the server-side StreamProgress union (lib/refresh.ts): refresh frames
@@ -42,6 +57,7 @@ type SourceLite = {
   connector: string;
   kind: string;
   label: string | null;
+  source?: string;
 };
 
 type Props = {
@@ -321,8 +337,10 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [, startTransition] = React.useTransition();
 
-  const [kind, setKind] = React.useState<'item' | 'standing'>('item');
+  const [type, setType] = React.useState<AddSourceType>('web');
   const [value, setValue] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, startAddTransition] = React.useTransition();
 
   function remove(sourceId: string) {
     startTransition(() => {
@@ -334,12 +352,17 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
     e.preventDefault();
     const v = value.trim();
     if (!v) return;
-    startTransition(() => {
-      addSourceAction(slug, { kind, value: v });
+    setError(null);
+    startAddTransition(async () => {
+      const res = await addSourceAction(slug, { type, value: v });
+      if (res.ok) {
+        setValue('');
+        setType('web');
+        setDialogOpen(false);
+      } else {
+        setError(res.error);
+      }
     });
-    setValue('');
-    setKind('item');
-    setDialogOpen(false);
   }
 
   return (
@@ -370,7 +393,7 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
                 >
                   <span className="truncate">{s.label ?? s.connector}</span>
                   <Badge variant="secondary" className="shrink-0">
-                    {s.kind === 'standing' ? 'permanente' : 'ponctuelle'}
+                    {sourceTypeLabel(s.connector, s.source)}
                   </Badge>
                   <Button
                     variant="ghost"
@@ -401,42 +424,37 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={add} className="space-y-4">
-                <div className="flex gap-1.5" role="group" aria-label="Type de source">
-                  <Button
-                    type="button"
-                    variant={kind === 'item' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setKind('item')}
-                    aria-pressed={kind === 'item'}
-                  >
-                    Une page web (URL)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={kind === 'standing' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setKind('standing')}
-                    aria-pressed={kind === 'standing'}
-                  >
-                    Une recherche permanente
-                  </Button>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Type de source">
+                  {ADD_SOURCE_OPTIONS.map((o) => (
+                    <Button
+                      key={o.type}
+                      type="button"
+                      variant={type === o.type ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setType(o.type)}
+                      aria-pressed={type === o.type}
+                    >
+                      {o.label}
+                    </Button>
+                  ))}
                 </div>
                 <Input
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
-                  placeholder={
-                    kind === 'item' ? 'https://exemple.fr/article' : 'Sujet ou requête à suivre'
-                  }
+                  placeholder={ADD_SOURCE_OPTIONS.find((o) => o.type === type)?.placeholder}
                   autoFocus
                 />
+                {error ? (
+                  <p className="text-[color:var(--color-muted-foreground)] text-sm italic">{error}</p>
+                ) : null}
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button type="button" variant="ghost" size="sm">
                       Annuler
                     </Button>
                   </DialogClose>
-                  <Button type="submit" size="sm" disabled={!value.trim()}>
-                    Ajouter
+                  <Button type="submit" size="sm" disabled={!value.trim() || pending}>
+                    {pending ? 'Ajout…' : 'Ajouter'}
                   </Button>
                 </DialogFooter>
               </form>

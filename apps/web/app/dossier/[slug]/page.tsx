@@ -62,6 +62,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
           connector: s.connector,
           kind: s.kind,
           label: s.label,
+          source: (s.input as { source?: string } | null)?.source,
         }))}
       />
 

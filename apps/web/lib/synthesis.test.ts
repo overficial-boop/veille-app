@@ -77,4 +77,9 @@ describe('stripUnknownLinks', () => {
     expect(stripUnknownLinks('[a](https://www.youtube.com/watch?v=ABC) [b](https://www.youtube.com/watch?v=XYZ)', allowed))
       .toBe('[a](https://www.youtube.com/watch?v=ABC) b');
   });
+  it('keeps a known URL that contains balanced parens (e.g. Wikipedia)', () => {
+    const a = ['https://fr.wikipedia.org/wiki/Pi_(mathématiques)'];
+    expect(stripUnknownLinks('voir [Pi](https://fr.wikipedia.org/wiki/Pi_(mathématiques)) ici', a))
+      .toBe('voir [Pi](https://fr.wikipedia.org/wiki/Pi_(mathématiques)) ici');
+  });
 });

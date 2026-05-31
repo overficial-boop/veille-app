@@ -64,7 +64,7 @@ export function stripUnknownLinks(markdown: string, allowedUrls: Iterable<string
   const norm = (u: string) => u.trim().replace(/#.*$/, '').replace(/\/$/, '');
   const allowed = new Set([...allowedUrls].map(norm));
   return markdown.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+    /\[([^\]]+)\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))*)\)/g,
     (_m, text: string, url: string) => (allowed.has(norm(url)) ? `[${text}](${url})` : text),
   );
 }

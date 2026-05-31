@@ -3,7 +3,7 @@ import { hostOf } from '@/lib/host';
 
 export type DossierRow = typeof dossiers.$inferSelect;
 export type FactRow = typeof facts.$inferSelect;
-export type TemplateProps = { dossier: DossierRow; facts: FactRow[] };
+export type TemplateProps = { dossier: DossierRow; facts: FactRow[]; citations: Record<string, number> };
 
 /** Best display date for a fact: provenance.publishedAt if present, else extractedAt. */
 export function factDate(f: FactRow): Date {

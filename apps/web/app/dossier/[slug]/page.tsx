@@ -11,6 +11,7 @@ import { DossierRuntime } from '@/components/dossier-runtime';
 import { sourceTarget } from '@/lib/source-input';
 import { TopBar } from '@/components/topbar';
 import { StatusPill, Eyebrow } from '@/components/veille-ui';
+import { buildCitationNumbers } from '@/lib/citations';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
     listFacts(dossier.id),
     listUpdates(dossier.id),
   ]);
+  const citations = buildCitationNumbers(dossier.brief, facts.map((f) => f.sourceUrl));
   return (
     <div className="shell">
       <TopBar email={session.user.email} />
@@ -88,7 +90,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
           <main style={{ minWidth: 0 }}>
             {/* Brief — the synthesis, the first thing the reader sees */}
             {dossier.brief ? (
-              <Brief brief={dossier.brief} />
+              <Brief brief={dossier.brief} citations={citations} />
             ) : (
               <section className="section" style={{ marginTop: 0 }}>
                 <div className="section-head">
@@ -142,7 +144,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
                   {new Set(facts.map((f) => f.sourceUrl.replace(/^https?:\/\//, '').split('/')[0])).size} publications
                 </span>
               </div>
-              <BySource dossier={dossier} facts={facts} />
+              <BySource dossier={dossier} facts={facts} citations={citations} />
             </section>
           </main>
         </div>

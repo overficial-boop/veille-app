@@ -23,9 +23,7 @@ export function FactRow({ fact, host }: { fact: FactRowType; host?: string }) {
         </summary>
         <blockquote>
           {fact.sourcePassage}
-          <span className="cite-src">
-            — {displayHost} · {fact.sourceUrl}
-          </span>
+          <span className="cite-src">— {displayHost}</span>
         </blockquote>
       </details>
     </div>

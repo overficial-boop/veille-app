@@ -14,6 +14,16 @@ function groupByHost(facts: FactRowType[]): { host: string; facts: FactRowType[]
   return [...map.entries()].map(([host, facts]) => ({ host, facts }));
 }
 
+/** Within a host group, sub-group facts by article URL (first-appearance order). */
+function groupByArticle(facts: FactRowType[]): { url: string; facts: FactRowType[] }[] {
+  const map = new Map<string, FactRowType[]>();
+  for (const f of facts) {
+    const arr = map.get(f.sourceUrl);
+    if (arr) arr.push(f); else map.set(f.sourceUrl, [f]);
+  }
+  return [...map.entries()].map(([url, facts]) => ({ url, facts }));
+}
+
 /**
  * Deterministic hue from a host string: stable hash mod 360, mapped to an
  * oklch swatch at constant lightness + chroma.
@@ -38,8 +48,8 @@ function pubMono(host: string): string {
   return (chars.slice(0, 2) || label.slice(0, 2)).toUpperCase();
 }
 
-/** Evidence grouped by publication host, with per-host blurbs from sourceNotes. */
-export function BySource({ dossier, facts }: TemplateProps) {
+/** Evidence grouped by publication host, then by article URL. */
+export function BySource({ dossier, facts, citations }: TemplateProps) {
   if (facts.length === 0) {
     return <p className="text-muted-foreground text-sm">Aucun fait pour l&apos;instant.</p>;
   }
@@ -49,26 +59,56 @@ export function BySource({ dossier, facts }: TemplateProps) {
 
   return (
     <>
-      {groups.map((g, idx) => (
-        <details key={g.host} className="pub" open={idx === 0}>
-          <summary className="pub-head">
-            <span className="pub-mono" style={{ background: pubHue(g.host) }}>
-              {pubMono(g.host)}
-            </span>
-            <span className="pub-info">
-              <span className="name">{g.host}</span>
-              {notes[g.host] && <span className="desc">{notes[g.host]}</span>}
-              <span className="ct">
-                {g.facts.length} fait{g.facts.length > 1 ? 's' : ''}
+      {groups.map((g, idx) => {
+        const articles = groupByArticle(g.facts);
+        const articleNums = articles
+          .map((a) => citations[a.url])
+          .filter((n): n is number => n !== undefined)
+          .sort((a, b) => a - b);
+
+        return (
+          <details key={g.host} className="pub" open={idx === 0}>
+            <summary className="pub-head">
+              <span className="pub-mono" style={{ background: pubHue(g.host) }}>
+                {pubMono(g.host)}
               </span>
-            </span>
-            <ChevronRight className="chev" />
-          </summary>
-          {g.facts.map((f) => (
-            <FactRow key={f.id} fact={f} host={g.host} />
-          ))}
-        </details>
-      ))}
+              <span className="pub-info">
+                <span className="name">{g.host}</span>
+                {notes[g.host] && <span className="desc">{notes[g.host]}</span>}
+                <span className="ct">
+                  {g.facts.length} fait{g.facts.length > 1 ? 's' : ''}
+                </span>
+                {articleNums.length > 0 && (
+                  <span className="pub-nums">
+                    {articleNums.map((num) => (
+                      <span key={num} className="pub-num">{num}</span>
+                    ))}
+                  </span>
+                )}
+              </span>
+              <ChevronRight className="chev" />
+            </summary>
+            {articles.map((a) => (
+              <div className="art" key={a.url}>
+                <div className="art-num">{citations[a.url] ?? '·'}</div>
+                <div className="art-body">
+                  <a
+                    className="art-url"
+                    href={a.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {a.url}
+                  </a>
+                  {a.facts.map((f) => (
+                    <FactRow key={f.id} fact={f} host={g.host} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </details>
+        );
+      })}
     </>
   );
 }

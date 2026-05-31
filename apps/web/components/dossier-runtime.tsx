@@ -22,7 +22,9 @@ import {
   addSourceAction,
   removeSourceAction,
   regenerateBriefAction,
+  updateSourceAction,
 } from '@/app/dossier/[slug]/actions';
+import { formatDateFr } from '@/components/templates/types';
 import type { AddSourceType } from '@/lib/source-input';
 
 const ADD_SOURCE_OPTIONS: { type: AddSourceType; label: string; placeholder: string }[] = [
@@ -344,6 +346,33 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startAddTransition] = React.useTransition();
 
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [editLabel, setEditLabel] = React.useState('');
+  const [editTarget, setEditTarget] = React.useState('');
+  const [savePending, startSaveTransition] = React.useTransition();
+
+  function toggleExpand(id: string) {
+    setExpandedId((p) => (p === id ? null : id));
+    setEditingId(null);
+  }
+
+  function startEdit(s: SourceLite) {
+    setEditingId(s.id);
+    setEditLabel(s.label ?? '');
+    setEditTarget(s.target ?? '');
+  }
+
+  function saveEdit(e: React.FormEvent, id: string) {
+    e.preventDefault();
+    const t = editTarget.trim();
+    if (!t) return;
+    startSaveTransition(async () => {
+      await updateSourceAction(slug, id, { label: editLabel.trim(), target: t });
+      setEditingId(null);
+    });
+  }
+
   function remove(sourceId: string) {
     startTransition(() => {
       removeSourceAction(slug, sourceId);
@@ -389,23 +418,96 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
           ) : (
             <ul className="space-y-1.5">
               {sources.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-center gap-2 rounded-md border border-[color:var(--color-border)] px-3 py-2 text-sm"
-                >
-                  <span className="truncate">{s.label ?? s.connector}</span>
-                  <Badge variant="secondary" className="shrink-0">
-                    {sourceTypeLabel(s.connector, s.source)}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-auto h-7 w-7 shrink-0"
-                    onClick={() => remove(s.id)}
-                    aria-label={`Retirer la source ${s.label ?? s.connector}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
+                <li key={s.id} className="rounded-md border border-[color:var(--color-border)] text-sm">
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(s.id)}
+                      aria-expanded={expandedId === s.id}
+                      aria-label="Détails de la source"
+                      className="text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)] shrink-0 transition-colors"
+                    >
+                      {expandedId === s.id ? '▾' : '▸'}
+                    </button>
+                    <span className="truncate">{s.label ?? s.connector}</span>
+                    <Badge variant="secondary" className="shrink-0">
+                      {sourceTypeLabel(s.connector, s.source)}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto h-7 w-7 shrink-0"
+                      onClick={() => remove(s.id)}
+                      aria-label={`Retirer la source ${s.label ?? s.connector}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
+                  {expandedId === s.id ? (
+                    <div className="border-t border-[color:var(--color-border)] px-3 py-2.5">
+                      {editingId === s.id ? (
+                        <form onSubmit={(e) => saveEdit(e, s.id)} className="space-y-2">
+                          <Input
+                            value={editLabel}
+                            onChange={(e) => setEditLabel(e.target.value)}
+                            placeholder="Nom de la source"
+                          />
+                          <Input
+                            value={editTarget}
+                            onChange={(e) => setEditTarget(e.target.value)}
+                            placeholder="Cible (URL, requête ou flux)"
+                          />
+                          <div className="flex gap-1.5">
+                            <Button
+                              type="submit"
+                              size="sm"
+                              disabled={!editTarget.trim() || savePending}
+                            >
+                              {savePending ? 'Enregistrement…' : 'Enregistrer'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingId(null)}
+                              disabled={savePending}
+                            >
+                              Annuler
+                            </Button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <dl className="text-[color:var(--color-muted-foreground)] space-y-1">
+                            <div>
+                              <span className="text-[color:var(--color-foreground)] font-medium">
+                                Type :{' '}
+                              </span>
+                              {sourceTypeLabel(s.connector, s.source)}
+                            </div>
+                            <div className="break-all">
+                              <span className="text-[color:var(--color-foreground)] font-medium">
+                                Cible :{' '}
+                              </span>
+                              {s.target || '—'}
+                            </div>
+                            <div>
+                              <span className="text-[color:var(--color-foreground)] font-medium">
+                                Dernière extraction :{' '}
+                              </span>
+                              {s.lastExtractedAt
+                                ? formatDateFr(new Date(s.lastExtractedAt))
+                                : 'jamais'}
+                            </div>
+                          </dl>
+                          <Button variant="outline" size="sm" onClick={() => startEdit(s)}>
+                            Éditer
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>

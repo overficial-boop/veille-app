@@ -123,19 +123,27 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
               </section>
             ) : null}
 
-            {/* Sources & evidence — collapsed by default; by-source is the evidence lens (re-skinned in T5b) */}
-            <details className="group mt-10 border-t border-[color:var(--color-border)] pt-6">
-              <summary className="text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)] flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium transition-colors">
-                <span className="transition-transform group-open:rotate-90" aria-hidden>
-                  ▸
+            {/* Sources & evidence — auditable evidence, grouped by publication */}
+            <section className="evidence">
+              <div className="section-head" style={{ maxWidth: 'none' }}>
+                <div className="ttl">
+                  <Eyebrow>Preuve auditable</Eyebrow>
+                  <h2 style={{ marginTop: '.1rem' }}>Sources et faits</h2>
+                </div>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--t-mono)',
+                    color: 'var(--ink-3)',
+                    letterSpacing: '.06em',
+                  }}
+                >
+                  {facts.length} fait{facts.length !== 1 ? 's' : ''} ·{' '}
+                  {new Set(facts.map((f) => f.sourceUrl.replace(/^https?:\/\//, '').split('/')[0])).size} publications
                 </span>
-                Sources et faits
-                <span className="text-[color:var(--color-muted-foreground)]">({facts.length})</span>
-              </summary>
-              <div className="mt-6">
-                <BySource dossier={dossier} facts={facts} />
               </div>
-            </details>
+              <BySource dossier={dossier} facts={facts} />
+            </section>
           </main>
         </div>
       </div>

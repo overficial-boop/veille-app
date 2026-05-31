@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/session';
 import { setTemplate, addSource, removeSource, getDossier } from '@/lib/dossiers';
 import { composeDossier } from '@/lib/synthesis';
-import { resolveYouTubeFeed, fetchFeedTitle, sourceSpecToRow, type AddSourceType } from '@/lib/source-input';
+import { resolveYouTubeFeed, fetchFeedTitle, sourceSpecToRow, type AddSourceType, type SourceRow } from '@/lib/source-input';
 
 async function ownerId(): Promise<string | null> {
   const session = await getSession();
@@ -30,7 +30,7 @@ export async function addSourceAction(
   const value = spec.value.trim();
   if (!value) return { ok: false, error: 'Entrée vide.' };
 
-  let row;
+  let row: SourceRow;
   if (spec.type === 'rss') {
     const meta = await fetchFeedTitle(value);
     if (!meta.ok) return { ok: false, error: meta.error };

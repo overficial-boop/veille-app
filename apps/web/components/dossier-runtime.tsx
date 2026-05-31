@@ -409,7 +409,13 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
             </ul>
           )}
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) setError(null);
+            }}
+          >
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <Plus className="h-3.5 w-3.5" />
@@ -431,7 +437,10 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
                       type="button"
                       variant={type === o.type ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => setType(o.type)}
+                      onClick={() => {
+                        setType(o.type);
+                        setError(null);
+                      }}
                       aria-pressed={type === o.type}
                     >
                       {o.label}
@@ -445,11 +454,11 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
                   autoFocus
                 />
                 {error ? (
-                  <p className="text-[color:var(--color-muted-foreground)] text-sm italic">{error}</p>
+                  <p className="text-[color:var(--color-foreground)] text-sm italic">{error}</p>
                 ) : null}
                 <DialogFooter>
                   <DialogClose asChild>
-                    <Button type="button" variant="ghost" size="sm">
+                    <Button type="button" variant="ghost" size="sm" disabled={pending}>
                       Annuler
                     </Button>
                   </DialogClose>

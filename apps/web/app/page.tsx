@@ -4,6 +4,7 @@ import { listDossiers } from '@/lib/dossiers';
 import { SignOutButton } from '@/components/sign-out-button';
 import { NewDossierForm } from '@/components/new-dossier-form';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { TopBar } from '@/components/topbar';
 
 const TEMPLATE_LABELS: Record<string, string> = {
   profile: 'Profil',
@@ -32,6 +33,8 @@ export default async function Home() {
   const items = await listDossiers(session.user.id);
 
   return (
+    <div className="shell">
+      <TopBar email={session.user.email} />
     <main className="mx-auto max-w-3xl px-6 py-12 sm:px-10">
       {/* Header band */}
       <header className="flex items-baseline justify-between border-b pb-5">
@@ -91,5 +94,6 @@ export default async function Home() {
         )}
       </section>
     </main>
+    </div>
   );
 }

@@ -8,9 +8,9 @@ export function SignOutButton() {
         await authClient.signOut();
         location.href = '/sign-in';
       }}
-      className="text-muted-foreground hover:text-foreground text-sm underline"
+      className="btn btn-ghost btn-sm"
     >
-      Se déconnecter
+      Déconnexion
     </button>
   );
 }

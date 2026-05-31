@@ -8,6 +8,7 @@ import { Brief } from '@/components/brief';
 import { BySource } from '@/components/templates/by-source';
 import { DossierRuntime } from '@/components/dossier-runtime';
 import { sourceTarget } from '@/lib/source-input';
+import { TopBar } from '@/components/topbar';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,8 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
     listUpdates(dossier.id),
   ]);
   return (
+    <div className="shell">
+      <TopBar email={session.user.email} />
     <main className="mx-auto max-w-3xl p-6 sm:p-10">
       <header className="border-b border-[color:var(--color-border)] pb-6">
         <Link
@@ -115,5 +118,6 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
         </div>
       </details>
     </main>
+    </div>
   );
 }

@@ -53,11 +53,15 @@ export function sourceSpecToRow(
 /** Fetch a feed URL, confirm it parses as a feed, and return its <title> for labelling. Server-safe. */
 export async function fetchFeedTitle(feedUrl: string): Promise<{ ok: true; title?: string } | { ok: false; error: string }> {
   try {
-    const res = await fetch(feedUrl, { headers: { 'user-agent': UA, accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' } });
+    const res = await fetch(feedUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'user-agent': UA, accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*' },
+    });
     if (!res.ok) return { ok: false, error: `Le flux a répondu ${res.status}.` };
     const xml = await res.text();
     if (!/<(rss|feed|channel)[\s>]/i.test(xml)) return { ok: false, error: 'Ce lien ne ressemble pas à un flux RSS/Atom.' };
-    const m = xml.match(/<title[^>]*>\s*(?:<!\[CDATA\[)?\s*([^<\]]+)/i);
+    const m = xml.match(/<title[^>]*>\s*<!\[CDATA\[\s*([\s\S]*?)\]\]>/i)
+      ?? xml.match(/<title[^>]*>\s*([^<]+)/i);
     return { ok: true, title: m?.[1]?.trim() };
   } catch {
     return { ok: false, error: 'Impossible de lire ce flux.' };
@@ -70,12 +74,16 @@ export async function resolveYouTubeFeed(input: string): Promise<{ feedUrl: stri
   const known = youtubeFeedFromInput(input);
   if (known) {
     const meta = await fetchFeedTitle(known);
+    // Known form: also confirm the feed is actually reachable before we store it.
     return meta.ok ? { feedUrl: known, title: meta.title } : { error: meta.error };
   }
   const pageUrl = toChannelUrl(input);
   if (!pageUrl) return { error: 'Chaîne YouTube introuvable.' };
   try {
-    const res = await fetch(pageUrl, { headers: { 'user-agent': UA, 'accept-language': 'en' } });
+    const res = await fetch(pageUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'user-agent': UA, 'accept-language': 'en' },
+    });
     if (!res.ok) return { error: `La page de la chaîne a répondu ${res.status}.` };
     const html = await res.text();
     const id = html.match(/"(?:channelId|externalId)":"(UC[\w-]+)"/)?.[1]

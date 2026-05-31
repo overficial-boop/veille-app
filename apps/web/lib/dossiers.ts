@@ -1,4 +1,4 @@
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, count, inArray } from 'drizzle-orm';
 import { uuidv7, slugify } from '@veille/core';
 import type { Fact } from '@veille/core';
 import type { DossierPlan } from '@veille/discovery';
@@ -8,11 +8,24 @@ import { factToRow } from './facts-map';
 import { sourceTargetField, type SourceInput } from './source-input';
 
 export async function listDossiers(ownerId: string) {
-  return db
+  const rows = await db
     .select()
     .from(dossiers)
     .where(eq(dossiers.ownerId, ownerId))
     .orderBy(desc(dossiers.createdAt));
+
+  if (rows.length === 0) return [];
+
+  // Fetch per-dossier fact counts in one query
+  const ids = rows.map((r) => r.id);
+  const counts = await db
+    .select({ dossierId: facts.dossierId, factCount: count(facts.id) })
+    .from(facts)
+    .where(inArray(facts.dossierId, ids))
+    .groupBy(facts.dossierId);
+
+  const countMap = Object.fromEntries(counts.map((c) => [c.dossierId, c.factCount]));
+  return rows.map((r) => ({ ...r, factCount: countMap[r.id] ?? 0 }));
 }
 
 export async function createDossier(ownerId: string, intent: string, plan: DossierPlan) {

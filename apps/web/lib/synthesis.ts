@@ -53,8 +53,20 @@ export function parseUpdate(text: string): { body: string; sourceNotes: Record<s
 /** Serialize grouped facts for a synthesis prompt. */
 export function renderGroups(groups: SourceGroup[]): string {
   return groups.map((g) =>
-    `## ${g.host}\n` + g.facts.map((f) => `- ${f.text}`).join('\n')
+    `## ${g.host}\n` + g.facts.map((f) => `- ${f.text} [source: ${f.sourceUrl}]`).join('\n')
   ).join('\n\n');
+}
+
+/** Anti-hallucination guard: unlink any Markdown link whose URL isn't a known source URL
+ *  (keep the link text as plain prose). Ignores a trailing "/" and a "#fragment" when comparing,
+ *  but preserves query strings so different YouTube watch?v= videos stay distinct. */
+export function stripUnknownLinks(markdown: string, allowedUrls: Iterable<string>): string {
+  const norm = (u: string) => u.trim().replace(/#.*$/, '').replace(/\/$/, '');
+  const allowed = new Set([...allowedUrls].map(norm));
+  return markdown.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+    (_m, text: string, url: string) => (allowed.has(norm(url)) ? `[${text}](${url})` : text),
+  );
 }
 
 const BRIEF_SCHEMA = {
@@ -87,7 +99,7 @@ export function buildBriefPrompt(subject: string, language: string, groups: Sour
     `Subject: ${subject}`,
     `Write in: ${language}. Output Markdown prose in the "brief" field.`,
     'Write a tight "current situation" brief: what is the state of things, the significant facts, who/what/when.',
-    'Attribute claims to their publication by name in-line (e.g. "selon lemonde.fr…"). Group related points; do not just list facts.',
+    'Attribute each claim to its source with a Markdown link to its EXACT URL as given in the [source: …] tag below — e.g. "selon [Le Monde](https://www.lemonde.fr/article-x)". Use ONLY the URLs provided; never invent or guess a URL. Group related points; do not just list facts.',
     'Also return, for each publication host below, a one-sentence "summary" of what that source is / its angle.',
     'Be factual and concise. No preamble. Return JSON only: { brief, sources: [{host, summary}] }.',
     '',
@@ -102,7 +114,7 @@ export function buildUpdatePrompt(subject: string, language: string, brief: stri
     `Subject: ${subject}`,
     `Write in: ${language}. Output Markdown prose in the "update" field.`,
     'Below is the EXISTING brief (context) and only the NEW facts since the last update.',
-    'Write a brief note describing what these new facts add or change relative to the brief. Attribute to publications by name. If nothing material, keep it to a sentence.',
+    'Write a brief note describing what these new facts add or change relative to the brief. Attribute each new claim with a Markdown link to its EXACT source URL from the [source: …] tags below; use only those URLs, never invent one. If nothing material, keep it to a sentence.',
     'For any publication host not implied by the existing brief, include it in "newSources" with a one-sentence summary.',
     'Return JSON only: { update, newSources: [{host, summary}] }.',
     '',
@@ -193,7 +205,9 @@ export async function composeDossier(
     const groups = groupFactsByHost(allRows.map(toFact));
     const res = await client.complete(buildBriefPrompt(subject, language, groups), { jsonSchema: BRIEF_SCHEMA });
     const { brief, sourceNotes } = parseBrief(res.text);
-    if (brief) await setBrief(dossierId, brief, sourceNotes);
+    const allowedUrls = new Set(allRows.map((r) => r.sourceUrl));
+    const safeBrief = brief ? stripUnknownLinks(brief, allowedUrls) : brief;
+    if (safeBrief) await setBrief(dossierId, safeBrief, sourceNotes);
     onProgress({ type: 'synthesis', phase: 'brief', state: 'done' });
     return { wrote: 'brief' };
   }
@@ -206,7 +220,9 @@ export async function composeDossier(
     { jsonSchema: UPDATE_SCHEMA },
   );
   const { body, sourceNotes } = parseUpdate(res.text);
-  if (body) await addUpdate(dossierId, body, newRows.length, sourceNotes);
+  const allowedUrls = new Set(newRows.map((r) => r.sourceUrl));
+  const safeBody = body ? stripUnknownLinks(body, allowedUrls) : body;
+  if (safeBody) await addUpdate(dossierId, safeBody, newRows.length, sourceNotes);
   onProgress({ type: 'synthesis', phase: 'update', state: 'done' });
   return { wrote: 'update' };
 }

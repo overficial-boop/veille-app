@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hostOf, groupFactsByHost, decideCompose, parseBrief, parseUpdate, renderGroups } from './synthesis';
+import { hostOf, groupFactsByHost, decideCompose, parseBrief, parseUpdate, renderGroups, stripUnknownLinks } from './synthesis';
 import type { Fact } from '@veille/core';
 
 const f = (sourceUrl: string, text: string, extractedAt = '2026-05-30T00:00:00.000Z'): Fact =>
@@ -51,11 +51,30 @@ describe('parseUpdate', () => {
 });
 
 describe('renderGroups', () => {
-  it('renders groups as markdown sections', () => {
+  it('renders groups as markdown sections with source URL tags', () => {
     expect(renderGroups([{ host: 'lemonde.fr', facts: [f('https://lemonde.fr/a', 'fact1')] }]))
-      .toBe('## lemonde.fr\n- fact1');
+      .toBe('## lemonde.fr\n- fact1 [source: https://lemonde.fr/a]');
   });
   it('renders an empty groups array as an empty string', () => {
     expect(renderGroups([])).toBe('');
+  });
+});
+
+describe('stripUnknownLinks', () => {
+  const allowed = ['https://lemonde.fr/a', 'https://www.youtube.com/watch?v=ABC'];
+  it('keeps links to known source URLs', () => {
+    expect(stripUnknownLinks('selon [Le Monde](https://lemonde.fr/a) et [v](https://www.youtube.com/watch?v=ABC).', allowed))
+      .toBe('selon [Le Monde](https://lemonde.fr/a) et [v](https://www.youtube.com/watch?v=ABC).');
+  });
+  it('unlinks unknown URLs, keeping the text', () => {
+    expect(stripUnknownLinks('voir [ailleurs](https://evil.com/x) ici', allowed)).toBe('voir ailleurs ici');
+  });
+  it('tolerates a trailing slash / fragment difference', () => {
+    expect(stripUnknownLinks('[x](https://lemonde.fr/a/) et [y](https://lemonde.fr/a#frag)', allowed))
+      .toBe('[x](https://lemonde.fr/a/) et [y](https://lemonde.fr/a#frag)');
+  });
+  it('keeps distinct youtube videos distinct (query preserved)', () => {
+    expect(stripUnknownLinks('[a](https://www.youtube.com/watch?v=ABC) [b](https://www.youtube.com/watch?v=XYZ)', allowed))
+      .toBe('[a](https://www.youtube.com/watch?v=ABC) b');
   });
 });

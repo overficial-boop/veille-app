@@ -36,6 +36,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html
       lang="fr"
       className={`${newsreader.variable} ${publicSans.variable} ${ibmPlexMono.variable}`}
+      // The pre-paint script below sets `data-theme` on <html> before React
+      // hydrates, so the server markup (no attribute) and the client DOM differ.
+      // This is intentional (no-FOUC theme) — suppress the attribute mismatch warning.
+      suppressHydrationWarning
     >
       <body>
         <script

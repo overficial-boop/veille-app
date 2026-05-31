@@ -405,7 +405,7 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
         aria-expanded={open}
       >
         <span>{open ? '▾' : '▸'}</span>
-        Sources
+        Recherches
         <span className="text-[color:var(--color-muted-foreground)]">({sources.length})</span>
       </button>
 
@@ -413,7 +413,7 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
         <div className="mt-3 space-y-2">
           {sources.length === 0 ? (
             <p className="text-[color:var(--color-muted-foreground)] text-sm">
-              Aucune source pour l&apos;instant.
+              Aucune recherche pour l&apos;instant.
             </p>
           ) : (
             <ul className="space-y-1.5">

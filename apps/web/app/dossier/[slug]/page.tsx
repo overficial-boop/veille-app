@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import { getDossier, listSources, listFacts, listUpdates } from '@/lib/dossiers';
 import { formatDateFr } from '@/components/templates/types';
 import { Prose } from '@/components/prose';
+import { Brief } from '@/components/brief';
 import { BySource } from '@/components/templates/by-source';
 import { DossierRuntime } from '@/components/dossier-runtime';
 import { sourceTarget } from '@/lib/source-input';
@@ -72,7 +73,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
       {/* Brief — the synthesis, the first thing the reader sees */}
       {dossier.brief ? (
         <section className="mt-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-card)] p-6 shadow-sm sm:p-8">
-          <Prose className="text-[color:var(--color-foreground)]">{dossier.brief}</Prose>
+          <Brief brief={dossier.brief} />
         </section>
       ) : (
         <p className="text-[color:var(--color-muted-foreground)] mt-8 text-sm">

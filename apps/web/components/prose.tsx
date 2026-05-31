@@ -1,3 +1,5 @@
+'use client';
+
 import ReactMarkdown from 'react-markdown';
 
 /** Renders trusted-ish LLM markdown as a safe subset (no raw HTML — react-markdown ignores it by default). */

@@ -1,35 +1,45 @@
 'use client';
 
 import * as React from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Prose } from './prose';
+import { Eyebrow } from './veille-ui';
 
 /**
- * Remove inline source citations (`[text](url)`, with any leading whitespace) so the brief
- * reads as clean prose. The synthesis brief embeds source links inline; hiding them by default
- * keeps the brief legible, and the toggle reveals the clickable sources on demand.
+ * The dossier brief — the synthesis, rendered as a `.section` with a drop-cap.
+ *
+ * The inline source citations stay in the DOM at all times; the `show-src` class
+ * (governed by CSS in globals.css) reveals or de-emphasizes their emphasis. The
+ * fold-toggle just flips that class — it does not strip links. Default is the
+ * clean reading view (sources de-emphasized).
  */
-function stripSourceLinks(markdown: string): string {
-  return markdown.replace(/\s*\[[^\]]+\]\((?:[^()]|\([^()]*\))*\)/g, '');
-}
-
-/** The dossier brief, with a hide/show toggle for its inline source links (hidden by default). */
 export function Brief({ brief }: { brief: string }) {
-  const [showSources, setShowSources] = React.useState(false);
+  const [showSrc, setShowSrc] = React.useState(false);
+  const toggle = () => setShowSrc((v) => !v);
+
   return (
-    <div>
-      <div className="mb-2 flex justify-end">
-        <button
-          type="button"
-          onClick={() => setShowSources((s) => !s)}
-          aria-pressed={showSources}
-          className="text-[color:var(--color-muted-foreground)] hover:text-[color:var(--color-foreground)] text-xs font-medium transition-colors"
+    <section className="section" style={{ marginTop: 0 }}>
+      <div className="section-head">
+        <div className="ttl">
+          <Eyebrow>Le brief</Eyebrow>
+          <h2 style={{ marginTop: '.1rem' }}>Situation actuelle</h2>
+        </div>
+        <div
+          className={'fold-toggle' + (showSrc ? ' on' : '')}
+          role="switch"
+          aria-checked={showSrc}
+          tabIndex={0}
+          onClick={toggle}
+          onKeyDown={(e) => e.key === 'Enter' && toggle()}
         >
-          {showSources ? 'Masquer les sources' : 'Afficher les sources'}
-        </button>
+          {showSrc ? <Eye /> : <EyeOff />}
+          {showSrc ? 'Sources affichées' : 'Afficher les sources'}
+        </div>
       </div>
-      <Prose className="text-[color:var(--color-foreground)]">
-        {showSources ? brief : stripSourceLinks(brief)}
-      </Prose>
-    </div>
+
+      <div className={'brief-prose' + (showSrc ? ' show-src' : '')}>
+        <Prose>{brief}</Prose>
+      </div>
+    </section>
   );
 }

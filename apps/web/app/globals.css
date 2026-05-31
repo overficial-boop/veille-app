@@ -444,10 +444,11 @@ details[open] > summary .chev { transform: rotate(90deg); }
 .pub-head { display: flex; align-items: flex-start; gap: .8rem; padding: 1.1rem .2rem .9rem; cursor: pointer; list-style: none; }
 .pub-head::-webkit-details-marker { display: none; }
 .pub-mono { width: 34px; height: 34px; border-radius: var(--radius-sm); flex: none; display: grid; place-items: center; font-family: var(--font-serif); font-weight: 600; font-size: 1rem; color: var(--accent-ink); }
-.pub-info { flex: 1; min-width: 0; }
+.pub-info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .pub-info .name { font-family: var(--font-mono); font-size: var(--t-sm); font-weight: 500; color: var(--ink); }
 .pub-info .desc { font-size: var(--t-xs); color: var(--ink-3); margin-top: .15rem; line-height: 1.45; }
-.pub-info .ct { font-family: var(--font-mono); font-size: var(--t-mono); color: var(--ink-3); }
+.pub-info .ct { font-family: var(--font-mono); font-size: var(--t-mono); color: var(--ink-3); margin-top: .2rem; }
+.pub-info .name .src-kind { color: var(--ink-3); font-weight: 400; }
 .pub-head .chev { width: 16px; height: 16px; color: var(--ink-3); transition: transform .2s var(--ease); margin-top: .4rem; flex: none; }
 details[open] > .pub-head .chev { transform: rotate(90deg); }
 .fact { padding: .85rem 0 .9rem 3.1rem; border-top: 1px dashed var(--line); animation: fade .5s var(--ease) both; }

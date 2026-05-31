@@ -58,6 +58,8 @@ type SourceLite = {
   kind: string;
   label: string | null;
   source?: string;
+  target?: string;
+  lastExtractedAt?: string | null;
 };
 
 type Props = {

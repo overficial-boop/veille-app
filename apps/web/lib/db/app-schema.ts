@@ -27,7 +27,7 @@ export const sources = pgTable('sources', {
     .references(() => dossiers.id, { onDelete: 'cascade' }),
   connector: text('connector').notNull(), // youtube|web|text|pdf|tavily|rss|youtube-channel
   kind: text('kind').notNull(), // 'standing' | 'item'
-  input: jsonb('input').notNull(),
+  input: jsonb('input').$type<{ url?: string; query?: string; feedUrl?: string; source?: string }>().notNull(),
   label: text('label'),
   lastExtractedAt: timestamp('last_extracted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

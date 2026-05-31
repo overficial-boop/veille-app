@@ -5,6 +5,7 @@ import type { DossierPlan } from '@veille/discovery';
 import { db } from './db';
 import { dossiers, sources, facts, dossierUpdates } from './db/schema';
 import { factToRow } from './facts-map';
+import { sourceTargetField, type SourceInput } from './source-input';
 
 export async function listDossiers(ownerId: string) {
   return db
@@ -109,6 +110,27 @@ export async function removeSource(ownerId: string, slug: string, sourceId: stri
   const dossier = await getDossier(ownerId, slug);
   if (!dossier) return;
   await db.delete(sources).where(and(eq(sources.id, sourceId), eq(sources.dossierId, dossier.id)));
+}
+
+/** Owner-scoped: update a source's label and/or its target (the primary input value). */
+export async function updateSource(
+  ownerId: string,
+  slug: string,
+  sourceId: string,
+  patch: { label?: string; target?: string },
+): Promise<void> {
+  const dossier = await getDossier(ownerId, slug);
+  if (!dossier) return;
+  const [row] = await db.select().from(sources).where(and(eq(sources.id, sourceId), eq(sources.dossierId, dossier.id)));
+  if (!row) return;
+  const set: Partial<typeof sources.$inferInsert> = {};
+  if (typeof patch.label === 'string') set.label = patch.label.trim() || null;
+  if (typeof patch.target === 'string') {
+    const field = sourceTargetField(row.connector);
+    if (field) set.input = { ...(row.input as SourceInput), [field]: patch.target.trim() };
+  }
+  if (Object.keys(set).length === 0) return;
+  await db.update(sources).set(set).where(and(eq(sources.id, sourceId), eq(sources.dossierId, dossier.id)));
 }
 
 /** Returns all updates for a dossier, newest first. */

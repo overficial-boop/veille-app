@@ -4,6 +4,24 @@
 
 export type AddSourceType = 'web' | 'search' | 'rss' | 'youtube';
 
+export type SourceInput = { url?: string; query?: string; feedUrl?: string; source?: string };
+
+/** The editable "target" field for a connector: web→url, tavily→query, rss→feedUrl, else none. */
+export function sourceTargetField(connector: string): 'url' | 'query' | 'feedUrl' | null {
+  if (connector === 'web') return 'url';
+  if (connector === 'tavily') return 'query';
+  if (connector === 'rss') return 'feedUrl';
+  return null;
+}
+
+/** The current target value of a source (its url/query/feed), or '' if none. */
+export function sourceTarget(connector: string, input: SourceInput | null | undefined): string {
+  const field = sourceTargetField(connector);
+  if (!field || !input) return '';
+  const v = input[field];
+  return typeof v === 'string' ? v : '';
+}
+
 export type SourceRow = {
   connector: string;
   kind: 'item' | 'standing';

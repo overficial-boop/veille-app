@@ -6,6 +6,7 @@ import { formatDateFr } from '@/components/templates/types';
 import { Prose } from '@/components/prose';
 import { BySource } from '@/components/templates/by-source';
 import { DossierRuntime } from '@/components/dossier-runtime';
+import { sourceTarget } from '@/lib/source-input';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +63,9 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
           connector: s.connector,
           kind: s.kind,
           label: s.label,
-          source: (s.input as { source?: string } | null)?.source,
+          source: s.input.source,
+          target: sourceTarget(s.connector, s.input),
+          lastExtractedAt: s.lastExtractedAt ? s.lastExtractedAt.toISOString() : null,
         }))}
       />
 

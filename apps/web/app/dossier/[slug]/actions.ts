@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/session';
-import { setTemplate, addSource, removeSource, getDossier } from '@/lib/dossiers';
+import { setTemplate, addSource, removeSource, getDossier, updateSource } from '@/lib/dossiers';
 import { composeDossier } from '@/lib/synthesis';
 import { resolveYouTubeFeed, fetchFeedTitle, sourceSpecToRow, type AddSourceType, type SourceRow } from '@/lib/source-input';
 
@@ -52,6 +52,17 @@ export async function removeSourceAction(slug: string, sourceId: string): Promis
   const id = await ownerId();
   if (!id) return;
   await removeSource(id, slug, sourceId);
+  revalidatePath(`/dossier/${slug}`);
+}
+
+export async function updateSourceAction(
+  slug: string,
+  sourceId: string,
+  patch: { label?: string; target?: string },
+): Promise<void> {
+  const id = await ownerId();
+  if (!id) return;
+  await updateSource(id, slug, sourceId, patch);
   revalidatePath(`/dossier/${slug}`);
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { youtubeFeedFromInput, sourceSpecToRow, extractFeedTitle } from './source-input';
+import { youtubeFeedFromInput, sourceSpecToRow, extractFeedTitle, sourceTargetField, sourceTarget } from './source-input';
 
 describe('youtubeFeedFromInput', () => {
   const feed = (id: string) => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`;
@@ -39,6 +39,23 @@ describe('extractFeedTitle', () => {
   });
 });
 
+describe('sourceTargetField', () => {
+  it('maps connectors to their editable field', () => {
+    expect(sourceTargetField('web')).toBe('url');
+    expect(sourceTargetField('tavily')).toBe('query');
+    expect(sourceTargetField('rss')).toBe('feedUrl');
+    expect(sourceTargetField('unknown')).toBeNull();
+  });
+});
+describe('sourceTarget', () => {
+  it('reads the primary value, else empty string', () => {
+    expect(sourceTarget('web', { url: 'https://x.fr' })).toBe('https://x.fr');
+    expect(sourceTarget('tavily', { query: 'attal' })).toBe('attal');
+    expect(sourceTarget('rss', { feedUrl: 'https://f', source: 'youtube' })).toBe('https://f');
+    expect(sourceTarget('rss', {})).toBe('');
+    expect(sourceTarget('unknown', { url: 'x' })).toBe('');
+  });
+});
 describe('sourceSpecToRow', () => {
   it('web → item/web', () => {
     expect(sourceSpecToRow('web', '  https://lemonde.fr/x  ')).toEqual({

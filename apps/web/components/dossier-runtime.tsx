@@ -447,17 +447,27 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
                   {expandedId === s.id ? (
                     <div className="border-t border-[color:var(--color-border)] px-3 py-2.5">
                       {editingId === s.id ? (
-                        <form onSubmit={(e) => saveEdit(e, s.id)} className="space-y-2">
-                          <Input
-                            value={editLabel}
-                            onChange={(e) => setEditLabel(e.target.value)}
-                            placeholder="Nom de la source"
-                          />
-                          <Input
-                            value={editTarget}
-                            onChange={(e) => setEditTarget(e.target.value)}
-                            placeholder="Cible (URL, requête ou flux)"
-                          />
+                        <form onSubmit={(e) => saveEdit(e, s.id)} className="space-y-3">
+                          <label className="block space-y-1">
+                            <span className="text-[color:var(--color-muted-foreground)] block text-xs font-medium">
+                              Nom
+                            </span>
+                            <Input
+                              value={editLabel}
+                              onChange={(e) => setEditLabel(e.target.value)}
+                              placeholder="Nom de la source"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <span className="text-[color:var(--color-muted-foreground)] block text-xs font-medium">
+                              Cible (URL, requête ou flux)
+                            </span>
+                            <Input
+                              value={editTarget}
+                              onChange={(e) => setEditTarget(e.target.value)}
+                              placeholder="Cible"
+                            />
+                          </label>
                           <div className="flex gap-1.5">
                             <Button
                               type="submit"

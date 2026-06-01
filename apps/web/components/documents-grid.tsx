@@ -2,31 +2,10 @@ import Link from 'next/link';
 import { Play } from 'lucide-react';
 import { formatDateFr } from '@/components/templates/types';
 import { hostOf } from '@/lib/host';
+import { pubHue, pubMono } from '@/lib/publication';
 import type { listDocuments } from '@/lib/documents';
 
 type DocRow = Awaited<ReturnType<typeof listDocuments>>[number];
-
-/**
- * Deterministic hue from a seed string — same helper as in by-source.tsx.
- * Task 8 will extract both to lib/publication.ts.
- */
-function pubHue(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (h * 31 + seed.charCodeAt(i)) & 0xffffffff;
-  }
-  const hue = Math.abs(h) % 360;
-  return `oklch(0.5 0.13 ${hue})`;
-}
-
-/**
- * Two-letter monogram from a publication name — same helper as in by-source.tsx.
- */
-function pubMono(name: string): string {
-  const label = name.replace(/^www\./, '').split('.')[0] ?? name;
-  const chars = label.replace(/[^a-zA-Z0-9]/g, '');
-  return (chars.slice(0, 2) || label.slice(0, 2)).toUpperCase();
-}
 
 /** Badge labels for the blocks present on a document card. */
 function blockBadges(d: DocRow): string[] {

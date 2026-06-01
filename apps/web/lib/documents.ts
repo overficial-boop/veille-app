@@ -7,9 +7,9 @@ import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, DocK
 export async function upsertDocument(
   dossierId: string,
   m: { url: string; title?: string; siteName?: string; kind: DocKind; publishedAt?: Date | null },
-): Promise<string> {
+): Promise<{ id: string; needsCore: boolean }> {
   const [existing] = await db
-    .select({ id: documents.id })
+    .select({ id: documents.id, review: documents.review })
     .from(documents)
     .where(and(eq(documents.dossierId, dossierId), eq(documents.url, m.url)));
   if (existing) {
@@ -17,7 +17,7 @@ export async function upsertDocument(
       .update(documents)
       .set({ title: m.title, siteName: m.siteName, kind: m.kind, publishedAt: m.publishedAt ?? null })
       .where(eq(documents.id, existing.id));
-    return existing.id;
+    return { id: existing.id, needsCore: existing.review == null };
   }
   const id = uuidv7();
   await db.insert(documents).values({
@@ -29,7 +29,7 @@ export async function upsertDocument(
     kind: m.kind,
     publishedAt: m.publishedAt ?? null,
   });
-  return id;
+  return { id, needsCore: true };
 }
 
 export async function setDocumentCore(

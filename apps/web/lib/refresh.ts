@@ -73,7 +73,7 @@ export async function refreshDossier(
     onProgress({ type: 'source-start', label: src.label ?? src.connector });
     try {
       let extracted: Fact[] = [];
-      const pendingDocs: { docId: string; url: string; content: string; title: string; siteName?: string }[] = [];
+      const pendingDocs: { docId: string; url: string; content: string; title: string; siteName?: string; needsCore: boolean }[] = [];
       if (src.kind === 'standing') {
         const cands = await candidatesFor(src);
         // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
@@ -108,14 +108,15 @@ export async function refreshDossier(
             const publishedAt = prov0?.publishedAt
               ? new Date(prov0.publishedAt)
               : c.publishedAt ? new Date(c.publishedAt) : null;
-            const docId = await upsertDocument(dossierId, {
+            const title = c.title ?? c.url;
+            const { id: docId, needsCore } = await upsertDocument(dossierId, {
               url: c.url,
-              title: (c as { title?: string }).title ?? c.url,
+              title,
               siteName,
               kind: yt ? 'youtube' : 'web',
               publishedAt,
             });
-            pendingDocs.push({ docId, url: c.url, content: captured, title: (c as { title?: string }).title ?? c.url, siteName });
+            pendingDocs.push({ docId, url: c.url, content: captured, title, siteName, needsCore });
           } catch {
             /* skip a bad candidate URL, keep going */
           }
@@ -131,14 +132,14 @@ export async function refreshDossier(
         const prov0 = extracted[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
         const siteName = yt ? (prov0?.channelName || 'youtube.com') : hostOf(url);
         const publishedAt = prov0?.publishedAt ? new Date(prov0.publishedAt) : null;
-        const docId = await upsertDocument(dossierId, {
+        const { id: docId, needsCore } = await upsertDocument(dossierId, {
           url,
           title: src.label ?? url,
           siteName,
           kind: yt ? 'youtube' : 'web',
           publishedAt,
         });
-        pendingDocs.push({ docId, url, content: captured, title: src.label ?? url, siteName });
+        pendingDocs.push({ docId, url, content: captured, title: src.label ?? url, siteName, needsCore });
       }
       // Drop facts the model scored as weakly-relevant to the subject (only when we have a
       // subjectHint; unscored facts are KEPT). Applied BEFORE dedup so `seen` tracks only
@@ -158,11 +159,10 @@ export async function refreshDossier(
       // Link facts to their documents and auto-analyze (review + bullets) for each new document.
       for (const d of pendingDocs) {
         await linkFacts(dossierId, d.docId, d.url);
-        if (!d.content) continue;
+        if (!d.content || !d.needsCore) continue;
         try {
           const core = await analyzeDocumentCore({ content: d.content, title: d.title, siteName: d.siteName, lang });
           await setDocumentCore(d.docId, core);
-          onProgress({ type: 'facts', sourceLabel: d.siteName ?? d.url, added: 0, total });
         } catch (e) {
           onProgress({ type: 'source-error', label: d.url, message: e instanceof Error ? e.message : String(e) });
         }

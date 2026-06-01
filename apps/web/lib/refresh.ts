@@ -7,6 +7,7 @@ import { discoverTavily, discoverRss, discoverYouTubeChannel } from '@veille/dis
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
+import { backfillPublishedAt } from './temporal';
 import { insertFacts } from './dossiers';
 import type { SynthesisProgress } from './synthesis';
 
@@ -87,8 +88,17 @@ export async function refreshDossier(
         for (const c of freshCandidates(ranked, seenUrls)) {
           const adapter = findAdapter({ kind: 'url', url: c.url });
           if (!adapter) continue;
-          try { extracted = extracted.concat(topFactsPerUrl(await extract(c.url, { language: lang, withSummary: false, subjectHint }), MAX_FACTS_PER_URL)); }
-          catch { /* skip a bad candidate URL, keep going */ }
+          try {
+            const top = topFactsPerUrl(
+              await extract(c.url, { language: lang, withSummary: false, subjectHint }),
+              MAX_FACTS_PER_URL,
+            );
+            // Backfill publication date from the discovery candidate (Tavily published_date /
+            // RSS pubDate) when the adapter didn't find one — improves stream classification.
+            extracted = extracted.concat(top.map((f) => backfillPublishedAt(f, c.publishedAt)));
+          } catch {
+            /* skip a bad candidate URL, keep going */
+          }
         }
       } else {
         const url = (src.input as { url: string }).url;

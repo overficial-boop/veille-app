@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hostOf, groupFactsByHost, decideCompose, parseBrief, parseUpdate, renderGroups, stripUnknownLinks } from './synthesis';
+import { hostOf, groupFactsByHost, decideCompose, parseBrief, parseUpdate, renderGroups, stripUnknownLinks, buildUpdatePrompt } from './synthesis';
 import type { Fact } from '@veille/core';
 
 const f = (sourceUrl: string, text: string, extractedAt = '2026-05-30T00:00:00.000Z'): Fact =>
@@ -81,5 +81,15 @@ describe('stripUnknownLinks', () => {
     const a = ['https://fr.wikipedia.org/wiki/Pi_(mathématiques)'];
     expect(stripUnknownLinks('voir [Pi](https://fr.wikipedia.org/wiki/Pi_(mathématiques)) ici', a))
       .toBe('voir [Pi](https://fr.wikipedia.org/wiki/Pi_(mathématiques)) ici');
+  });
+});
+
+describe('buildUpdatePrompt framing', () => {
+  const g = [{ host: 'lemonde.fr', facts: [] }];
+  it('actualite framing mentions recent developments', () => {
+    expect(buildUpdatePrompt('X', 'fr', 'b', g, 'actualite')).toMatch(/RECENT developments/);
+  });
+  it('complement framing mentions older items', () => {
+    expect(buildUpdatePrompt('X', 'fr', 'b', g, 'complement')).toMatch(/OLDER items/);
   });
 });

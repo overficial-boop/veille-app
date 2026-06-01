@@ -6,12 +6,12 @@ import { Eyebrow } from './veille-ui';
 import { citeComponents, prepareCiteMd } from './cited-markdown';
 import { useCitations, SourcesToggle } from './citations-context';
 
-export type JournalEntry = { id: string; when: string; body: string };
+export type JournalEntry = { id: string; when: string; body: string; kind: 'actualite' | 'complement' };
 
 /**
- * The dossier journal — dated "what's new" notes, newest first. Citations render as
- * numbered superscripts (same map + toggle as the brief), so the dated prose reads
- * cleanly and the sources reveal on demand instead of cluttering the text inline.
+ * The dossier journal — two recency streams. "Actualité" = developments published since the
+ * last refresh; "Compléments / Découvertes" = older or undated material newly found. Citations
+ * render as numbered superscripts (shared map + toggle with the brief).
  */
 export function Journal({
   entries,
@@ -22,29 +22,50 @@ export function Journal({
 }) {
   const { show } = useCitations();
   const components = React.useMemo(() => citeComponents(citations), [citations]);
-
   if (entries.length === 0) return null;
 
-  return (
-    <section className="section">
-      <div className="section-head">
-        <div className="ttl">
-          <Eyebrow>Journal</Eyebrow>
-          <h2 style={{ marginTop: '.1rem' }}>Mises à jour</h2>
-        </div>
-        <SourcesToggle />
-      </div>
+  const actu = entries.filter((e) => e.kind === 'actualite');
+  const comp = entries.filter((e) => e.kind === 'complement');
 
-      <div className="journal">
-        {entries.map((u) => (
-          <div key={u.id} className="update fade">
-            <div className="when">{u.when}</div>
-            <div className={'body' + (show ? ' show-src' : '')}>
-              <ReactMarkdown components={components}>{prepareCiteMd(u.body)}</ReactMarkdown>
-            </div>
+  const stream = (items: JournalEntry[]) => (
+    <div className="journal">
+      {items.map((u) => (
+        <div key={u.id} className="update fade">
+          <div className="when">{u.when}</div>
+          <div className={'body' + (show ? ' show-src' : '')}>
+            <ReactMarkdown components={components}>{prepareCiteMd(u.body)}</ReactMarkdown>
           </div>
-        ))}
-      </div>
-    </section>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <>
+      {actu.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <div className="ttl">
+              <Eyebrow>Journal</Eyebrow>
+              <h2 style={{ marginTop: '.1rem' }}>Actualité</h2>
+            </div>
+            <SourcesToggle />
+          </div>
+          {stream(actu)}
+        </section>
+      )}
+      {comp.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <div className="ttl">
+              <Eyebrow>Journal</Eyebrow>
+              <h2 style={{ marginTop: '.1rem' }}>Compléments / Découvertes</h2>
+            </div>
+            {actu.length === 0 && <SourcesToggle />}
+          </div>
+          {stream(comp)}
+        </section>
+      )}
+    </>
   );
 }

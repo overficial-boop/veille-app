@@ -111,6 +111,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
                   id: u.id,
                   when: formatDateFr(new Date(u.createdAt)),
                   body: u.body,
+                  kind: u.kind === 'complement' ? 'complement' : 'actualite',
                 }))}
                 citations={citations}
               />

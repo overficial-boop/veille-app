@@ -37,6 +37,7 @@ export const dossierUpdates = pgTable('dossier_updates', {
   id: uuid('id').primaryKey(),
   dossierId: uuid('dossier_id').notNull().references(() => dossiers.id, { onDelete: 'cascade' }),
   body: text('body').notNull(),
+  kind: text('kind').notNull().default('actualite'), // 'actualite' | 'complement'
   factCount: integer('fact_count').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

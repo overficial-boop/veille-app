@@ -1,0 +1,1 @@
+ALTER TABLE "dossier_updates" ADD COLUMN "kind" text DEFAULT 'actualite' NOT NULL;

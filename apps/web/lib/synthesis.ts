@@ -3,6 +3,7 @@ import { eq, desc } from 'drizzle-orm';
 import { dossiers, facts as factsTable, dossierUpdates } from './db/schema';
 import { selectLlmClient } from '@veille/core';
 import { hostOf } from './host';
+import { classify } from './temporal';
 
 export type SourceGroup = { host: string; facts: Fact[] };
 
@@ -108,11 +109,22 @@ export function buildBriefPrompt(subject: string, language: string, groups: Sour
   ].join('\n');
 }
 
-export function buildUpdatePrompt(subject: string, language: string, brief: string, newGroups: SourceGroup[]): string {
+export function buildUpdatePrompt(
+  subject: string,
+  language: string,
+  brief: string,
+  newGroups: SourceGroup[],
+  stream: 'actualite' | 'complement' = 'actualite',
+): string {
+  const framing =
+    stream === 'complement'
+      ? 'These are OLDER items newly added to the dossier — background/context discovered since last time, NOT breaking news. Summarize what context they add.'
+      : 'These are RECENT developments since the last update.';
   return [
     'You write a short dated "what\'s new" update to an existing dossier.',
     `Subject: ${subject}`,
     `Write in: ${language}. Output Markdown prose in the "update" field.`,
+    framing,
     'Below is the EXISTING brief (context) and only the NEW facts since the last update.',
     'Write a brief note describing what these new facts add or change relative to the brief. Attribute each new claim with a Markdown link to its EXACT source URL from the [source: …] tags below; use only those URLs, never invent one. If nothing material, keep it to a sentence.',
     'For any publication host not implied by the existing brief, include it in "newSources" with a one-sentence summary.',
@@ -212,17 +224,28 @@ export async function composeDossier(
     return { wrote: 'brief' };
   }
 
-  // update
-  onProgress({ type: 'synthesis', phase: 'update', state: 'start' });
-  const groups = groupFactsByHost(newRows.map(toFact));
-  const res = await client.complete(
-    buildUpdatePrompt(subject, language, dossier.brief ?? '', groups),
-    { jsonSchema: UPDATE_SCHEMA },
-  );
-  const { body, sourceNotes } = parseUpdate(res.text);
-  const allowedUrls = new Set(newRows.map((r) => r.sourceUrl));
-  const safeBody = body ? stripUnknownLinks(body, allowedUrls) : body;
-  if (safeBody) await addUpdate(dossierId, safeBody, newRows.length, sourceNotes);
-  onProgress({ type: 'synthesis', phase: 'update', state: 'done' });
-  return { wrote: 'update' };
+  // update — split the run's new facts into two recency streams; one row per non-empty stream.
+  const buckets: Array<[ 'actualite' | 'complement', typeof newRows ]> = [
+    ['actualite', newRows.filter((r) => classify(r, cutoff) === 'actualite')],
+    ['complement', newRows.filter((r) => classify(r, cutoff) === 'complement')],
+  ];
+  let wroteAny = false;
+  for (const [stream, rows] of buckets) {
+    if (rows.length === 0) continue;
+    onProgress({ type: 'synthesis', phase: 'update', state: 'start' });
+    const groups = groupFactsByHost(rows.map(toFact));
+    const res = await client.complete(
+      buildUpdatePrompt(subject, language, dossier.brief ?? '', groups, stream),
+      { jsonSchema: UPDATE_SCHEMA },
+    );
+    const { body, sourceNotes } = parseUpdate(res.text);
+    const allowedUrls = new Set(rows.map((r) => r.sourceUrl));
+    const safeBody = body ? stripUnknownLinks(body, allowedUrls) : body;
+    if (safeBody) {
+      await addUpdate(dossierId, safeBody, rows.length, sourceNotes, stream);
+      wroteAny = true;
+    }
+    onProgress({ type: 'synthesis', phase: 'update', state: 'done' });
+  }
+  return { wrote: wroteAny ? 'update' : 'none' };
 }

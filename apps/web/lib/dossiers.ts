@@ -157,9 +157,15 @@ export async function setBrief(dossierId: string, brief: string, sourceNotes: Re
 }
 
 /** Appends an update entry and merges newSourceNotes into dossiers.source_notes atomically. */
-export async function addUpdate(dossierId: string, body: string, factCount: number, newSourceNotes: Record<string, string>) {
+export async function addUpdate(
+  dossierId: string,
+  body: string,
+  factCount: number,
+  newSourceNotes: Record<string, string>,
+  kind: 'actualite' | 'complement' = 'actualite',
+) {
   await db.transaction(async (tx) => {
-    await tx.insert(dossierUpdates).values({ id: uuidv7(), dossierId, body, factCount });
+    await tx.insert(dossierUpdates).values({ id: uuidv7(), dossierId, body, factCount, kind });
     if (Object.keys(newSourceNotes).length > 0) {
       const [d] = await tx.select({ notes: dossiers.sourceNotes }).from(dossiers).where(eq(dossiers.id, dossierId));
       const merged = { ...(d?.notes ?? {}), ...newSourceNotes };

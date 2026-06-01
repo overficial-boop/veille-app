@@ -11,6 +11,8 @@ export type ExtractHints = {
   onSummary?: (summary: string) => void;
   /** Final cost (tokens + model), fired once after extraction completes. */
   onCost?: (cost: CostInfo) => void;
+  /** Fired once with the joined cleaned source text (for downstream per-document analysis). */
+  onContent?: (content: string) => void;
   concurrency?: number;
   model?: string;
   withSummary?: boolean;

@@ -97,6 +97,10 @@ export async function runFactExtraction(
   } = input;
 
   const chunks = buildChunks(segments, singleCall, chunkSize);
+
+  // Surface the cleaned source text once, for downstream analysis (additive, opt-in).
+  hints?.onContent?.(segments.map((s) => s.text).join('\n'));
+
   const extractedAt = new Date().toISOString();
 
   const perChunk = async (

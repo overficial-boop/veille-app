@@ -126,7 +126,7 @@ export function buildUpdatePrompt(
     `Write in: ${language}. Output Markdown prose in the "update" field.`,
     framing,
     'Below is the EXISTING brief (context) and only the NEW facts since the last update.',
-    'Write a brief note describing what these new facts add or change relative to the brief. Attribute each new claim with a Markdown link to its EXACT source URL from the [source: …] tags below; use only those URLs, never invent one. If nothing material, keep it to a sentence.',
+    'Write a brief note describing what these new facts add or change relative to the brief. Attribute each claim with a Markdown link whose TEXT is the source/publication name and whose target is its EXACT URL from the [source: …] tags below — e.g. "selon [Le Monde](https://www.lemonde.fr/article-x)". Use only those URLs, never invent one. NEVER output a bare or bracketed URL like "[https://…]" — always the full [texte](url) form. If nothing material, keep it to a sentence.',
     'For any publication host not implied by the existing brief, include it in "newSources" with a one-sentence summary.',
     'Return JSON only: { update, newSources: [{host, summary}] }.',
     '',

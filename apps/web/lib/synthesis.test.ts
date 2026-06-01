@@ -92,4 +92,9 @@ describe('buildUpdatePrompt framing', () => {
   it('complement framing mentions older items', () => {
     expect(buildUpdatePrompt('X', 'fr', 'b', g, 'complement')).toMatch(/OLDER items/);
   });
+  it('requires proper [texte](url) links and forbids bare/bracketed URLs', () => {
+    const p = buildUpdatePrompt('X', 'fr', 'b', g, 'actualite');
+    expect(p).toMatch(/\[texte\]\(url\)/);
+    expect(p).toMatch(/NEVER output a bare or bracketed URL/);
+  });
 });

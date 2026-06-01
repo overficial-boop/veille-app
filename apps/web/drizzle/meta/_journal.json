@@ -50,6 +50,13 @@
       "when": 1780317285139,
       "tag": "0006_slim_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780322043387,
+      "tag": "0007_charming_slipstream",
+      "breakpoints": true
     }
   ]
 }

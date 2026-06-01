@@ -2,12 +2,13 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/session';
-import { getDossier, listSources, listFacts, listUpdates } from '@/lib/dossiers';
+import { getDossier, listSources, listFacts, listUpdates, pendingRebuildCount } from '@/lib/dossiers';
 import { listDocuments } from '@/lib/documents';
 import { formatDateFr } from '@/components/templates/types';
 import { Brief } from '@/components/brief';
 import { Journal } from '@/components/journal';
 import { CitationsProvider } from '@/components/citations-context';
+import { RebuildProposal } from '@/components/rebuild-proposal';
 import { DossierRuntime } from '@/components/dossier-runtime';
 import { DossierTabs } from '@/components/dossier-tabs';
 import { DocumentsGrid } from '@/components/documents-grid';
@@ -34,11 +35,12 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
   if (!session) redirect('/sign-in');
   const dossier = await getDossier(session.user.id, slug);
   if (!dossier) notFound();
-  const [sources, facts, updates, documents] = await Promise.all([
+  const [sources, facts, updates, documents, pendingRebuild] = await Promise.all([
     listSources(dossier.id),
     listFacts(dossier.id),
     listUpdates(dossier.id),
     listDocuments(dossier.id),
+    pendingRebuildCount(dossier.id),
   ]);
   const citations = buildCitationNumbers(dossier.brief, facts.map((f) => f.sourceUrl));
   return (
@@ -96,6 +98,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
               documentCount={documents.length}
               synthese={
                 <CitationsProvider>
+                  <RebuildProposal count={pendingRebuild} slug={dossier.slug} />
                   {/* Brief — the synthesis, the first thing the reader sees */}
                   {dossier.brief ? (
                     <Brief brief={dossier.brief} citations={citations} />

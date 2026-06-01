@@ -17,6 +17,7 @@ export const dossiers = pgTable('dossiers', {
   refreshedAt: timestamp('refreshed_at', { withTimezone: true }),
   brief: text('brief'),
   briefGeneratedAt: timestamp('brief_generated_at', { withTimezone: true }),
+  briefSuggestionDismissedAt: timestamp('brief_suggestion_dismissed_at', { withTimezone: true }),
   sourceNotes: jsonb('source_notes').$type<Record<string, string>>(),
 }, (t) => [uniqueIndex('dossiers_owner_slug_idx').on(t.ownerId, t.slug)]);
 

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/session';
-import { setTemplate, addSource, removeSource, getDossier, updateSource } from '@/lib/dossiers';
+import { setTemplate, addSource, removeSource, getDossier, updateSource, dismissBriefSuggestion } from '@/lib/dossiers';
 import { composeDossier } from '@/lib/synthesis';
 import { resolveYouTubeFeed, fetchFeedTitle, sourceSpecToRow, type AddSourceType, type SourceRow } from '@/lib/source-input';
 
@@ -72,5 +72,12 @@ export async function regenerateBriefAction(slug: string): Promise<void> {
   const dossier = await getDossier(id, slug);
   if (!dossier) return;
   await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr' });
+  revalidatePath(`/dossier/${slug}`);
+}
+
+export async function dismissBriefSuggestionAction(slug: string): Promise<void> {
+  const id = await ownerId();
+  if (!id) return;
+  await dismissBriefSuggestion(id, slug);
   revalidatePath(`/dossier/${slug}`);
 }

@@ -6,6 +6,7 @@ import { db } from './db';
 import { dossiers, sources, facts, dossierUpdates } from './db/schema';
 import { factToRow } from './facts-map';
 import { sourceTargetField, type SourceInput } from './source-input';
+import { countPendingRebuild } from './temporal';
 
 export async function listDossiers(ownerId: string) {
   const rows = await db
@@ -172,4 +173,25 @@ export async function addUpdate(
       await tx.update(dossiers).set({ sourceNotes: merged }).where(eq(dossiers.id, dossierId));
     }
   });
+}
+
+/** Derived count of older-than-brief facts found since the brief / last snooze (drives the rebuild banner). */
+export async function pendingRebuildCount(dossierId: string): Promise<number> {
+  const [d] = await db
+    .select({ briefGeneratedAt: dossiers.briefGeneratedAt, dismissedAt: dossiers.briefSuggestionDismissedAt })
+    .from(dossiers)
+    .where(eq(dossiers.id, dossierId));
+  if (!d?.briefGeneratedAt) return 0;
+  const rows = await db
+    .select({ createdAt: facts.createdAt, provenance: facts.provenance })
+    .from(facts)
+    .where(eq(facts.dossierId, dossierId));
+  return countPendingRebuild(rows, d.briefGeneratedAt, d.dismissedAt ?? null);
+}
+
+/** Owner-scoped: snooze the rebuild proposal (the banner returns when newer old facts arrive). */
+export async function dismissBriefSuggestion(ownerId: string, slug: string): Promise<void> {
+  const dossier = await getDossier(ownerId, slug);
+  if (!dossier) return;
+  await db.update(dossiers).set({ briefSuggestionDismissedAt: new Date() }).where(eq(dossiers.id, dossier.id));
 }

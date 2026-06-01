@@ -42,3 +42,16 @@ export function backfillPublishedAt<T extends { provenance: unknown }>(
   const prov = fact.provenance && typeof fact.provenance === 'object' ? fact.provenance : {};
   return { ...fact, provenance: { ...prov, publishedAt: d.toISOString() } };
 }
+
+/** Count facts that should prompt a brief rebuild: published before the brief was built
+ *  (classify → 'complement', incl. unknown dates) AND found since the brief / since the
+ *  last snooze. Returns 0 when no brief exists yet. Pure (testable). */
+export function countPendingRebuild(
+  facts: { createdAt: Date; provenance: unknown }[],
+  briefGeneratedAt: Date | null,
+  dismissedAt: Date | null,
+): number {
+  if (!briefGeneratedAt) return 0;
+  const floor = dismissedAt && dismissedAt > briefGeneratedAt ? dismissedAt : briefGeneratedAt;
+  return facts.filter((f) => f.createdAt > floor && classify(f, briefGeneratedAt) === 'complement').length;
+}

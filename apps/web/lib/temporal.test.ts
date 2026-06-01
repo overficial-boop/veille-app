@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDate, factPublishedAt, classify, backfillPublishedAt } from './temporal';
+import { parseDate, factPublishedAt, classify, backfillPublishedAt, countPendingRebuild } from './temporal';
 
 describe('parseDate', () => {
   it('parses ISO dates', () => {
@@ -54,5 +54,31 @@ describe('backfillPublishedAt', () => {
     const orig = { provenance: {} };
     expect(backfillPublishedAt(orig, undefined)).toBe(orig);
     expect(backfillPublishedAt(orig, 'garbage')).toBe(orig);
+  });
+});
+
+describe('countPendingRebuild', () => {
+  const brief = new Date('2026-05-29T00:00:00Z');
+  const mk = (createdAt: string, publishedAt?: string) => ({ createdAt: new Date(createdAt), provenance: publishedAt ? { publishedAt } : {} });
+
+  it('returns 0 when no brief yet', () => {
+    expect(countPendingRebuild([mk('2026-05-30', '2020-01-01')], null, null)).toBe(0);
+  });
+  it('counts old-published facts created after the brief', () => {
+    expect(countPendingRebuild([mk('2026-05-30', '2025-08-15')], brief, null)).toBe(1);
+  });
+  it('ignores recent-published facts (they belong to the journal)', () => {
+    expect(countPendingRebuild([mk('2026-05-30', '2026-05-30')], brief, null)).toBe(0);
+  });
+  it('counts undated facts (conservative)', () => {
+    expect(countPendingRebuild([mk('2026-05-30')], brief, null)).toBe(1);
+  });
+  it('excludes facts created on/before the brief', () => {
+    expect(countPendingRebuild([mk('2026-05-28', '2025-08-15')], brief, null)).toBe(0);
+  });
+  it('snooze: counts only facts created after dismissedAt', () => {
+    const dismissed = new Date('2026-05-31T00:00:00Z');
+    const facts = [mk('2026-05-30', '2025-08-15'), mk('2026-06-01', '2025-08-16')];
+    expect(countPendingRebuild(facts, brief, dismissed)).toBe(1);
   });
 });

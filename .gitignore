@@ -8,3 +8,4 @@ dist/
 next-env.d.ts
 drizzle/meta/_journal.json.lock
 .playwright-mcp/
+.superpowers/

@@ -42,6 +42,22 @@ export const dossierUpdates = pgTable('dossier_updates', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const documents = pgTable('documents', {
+  id: uuid('id').primaryKey(),
+  dossierId: uuid('dossier_id').notNull().references(() => dossiers.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  title: text('title'),
+  siteName: text('site_name'),                 // host, or YouTube channel name
+  kind: text('kind').notNull().default('web'), // 'web' | 'youtube'
+  publishedAt: timestamp('published_at', { withTimezone: true }),
+  shortSummary: text('short_summary'),
+  review: jsonb('review'),
+  bullets: jsonb('bullets'),
+  elaboration: jsonb('elaboration'),
+  factChecks: jsonb('fact_checks'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('documents_dossier_url_idx').on(t.dossierId, t.url)]);
+
 export const facts = pgTable('facts', {
   id: uuid('id').primaryKey(),
   dossierId: uuid('dossier_id')
@@ -50,6 +66,7 @@ export const facts = pgTable('facts', {
   sourceId: uuid('source_id')
     .notNull()
     .references(() => sources.id, { onDelete: 'cascade' }),
+  documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
   sourceUrl: text('source_url').notNull(),
   text: text('text').notNull(),
   sourcePassage: text('source_passage').notNull(),

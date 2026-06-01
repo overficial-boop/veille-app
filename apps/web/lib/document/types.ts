@@ -1,0 +1,11 @@
+export type TokenCost = { model: string; inputTokens: number; outputTokens: number };
+export type BlockMeta = { model: string; promptHash: string; generatedAt: string; cost: TokenCost };
+export type ReviewBlock = { markdown: string } & BlockMeta;
+export type BulletsBlock = { markdown: string } & BlockMeta;
+export type ElaborationResource = { name: string; kind?: 'book' | 'paper' | 'talk' | 'person' | 'other'; note?: string };
+export type ElaborationLink = { url: string; title: string; siteName?: string; excerpt?: string };
+export type ElaborationTopic = { name: string; summary: string; resources?: ElaborationResource[]; links?: ElaborationLink[] };
+export type ElaborationBlock = { topics: ElaborationTopic[]; withTavily: boolean } & BlockMeta;
+export type FactCheck = { factId: string; note: string };
+export type FactChecksBlock = { checks: FactCheck[] } & BlockMeta;
+export type DocKind = 'web' | 'youtube';

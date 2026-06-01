@@ -3,12 +3,14 @@ import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/session';
 import { getDossier, listSources, listFacts, listUpdates } from '@/lib/dossiers';
+import { listDocuments } from '@/lib/documents';
 import { formatDateFr } from '@/components/templates/types';
 import { Brief } from '@/components/brief';
 import { Journal } from '@/components/journal';
 import { CitationsProvider } from '@/components/citations-context';
-import { BySource } from '@/components/templates/by-source';
 import { DossierRuntime } from '@/components/dossier-runtime';
+import { DossierTabs } from '@/components/dossier-tabs';
+import { DocumentsGrid } from '@/components/documents-grid';
 import { sourceTarget } from '@/lib/source-input';
 import { TopBar } from '@/components/topbar';
 import { StatusPill, Eyebrow } from '@/components/veille-ui';
@@ -32,10 +34,11 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
   if (!session) redirect('/sign-in');
   const dossier = await getDossier(session.user.id, slug);
   if (!dossier) notFound();
-  const [sources, facts, updates] = await Promise.all([
+  const [sources, facts, updates, documents] = await Promise.all([
     listSources(dossier.id),
     listFacts(dossier.id),
     listUpdates(dossier.id),
+    listDocuments(dossier.id),
   ]);
   const citations = buildCitationNumbers(dossier.brief, facts.map((f) => f.sourceUrl));
   return (
@@ -87,57 +90,43 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
             />
           </aside>
 
-          {/* MAIN — brief, journal, evidence */}
+          {/* MAIN — brief, journal, documents */}
           <main style={{ minWidth: 0 }}>
-            <CitationsProvider>
-              {/* Brief — the synthesis, the first thing the reader sees */}
-              {dossier.brief ? (
-                <Brief brief={dossier.brief} citations={citations} />
-              ) : (
-                <section className="section" style={{ marginTop: 0 }}>
-                  <div className="section-head">
-                    <div className="ttl">
-                      <Eyebrow>Le brief</Eyebrow>
-                      <h2 style={{ marginTop: '.1rem' }}>Situation actuelle</h2>
-                    </div>
-                  </div>
-                  <div className="brief-empty">Synthèse en attente — lancez l&apos;assemblage.</div>
-                </section>
-              )}
+            <DossierTabs
+              documentCount={documents.length}
+              synthese={
+                <CitationsProvider>
+                  {/* Brief — the synthesis, the first thing the reader sees */}
+                  {dossier.brief ? (
+                    <Brief brief={dossier.brief} citations={citations} />
+                  ) : (
+                    <section className="section" style={{ marginTop: 0 }}>
+                      <div className="section-head">
+                        <div className="ttl">
+                          <Eyebrow>Le brief</Eyebrow>
+                          <h2 style={{ marginTop: '.1rem' }}>Situation actuelle</h2>
+                        </div>
+                      </div>
+                      <div className="brief-empty">Synthèse en attente — lancez l&apos;assemblage.</div>
+                    </section>
+                  )}
 
-              {/* Journal — dated "what's new" notes, newest first */}
-              <Journal
-                entries={updates.map((u) => ({
-                  id: u.id,
-                  when: formatDateFr(new Date(u.createdAt)),
-                  body: u.body,
-                  kind: u.kind === 'complement' ? 'complement' : 'actualite',
-                }))}
-                citations={citations}
-              />
-            </CitationsProvider>
-
-            {/* Sources & evidence — auditable evidence, grouped by publication */}
-            <section className="evidence">
-              <div className="section-head" style={{ maxWidth: 'none' }}>
-                <div className="ttl">
-                  <Eyebrow>Preuve auditable</Eyebrow>
-                  <h2 style={{ marginTop: '.1rem' }}>Sources et faits</h2>
-                </div>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--t-mono)',
-                    color: 'var(--ink-3)',
-                    letterSpacing: '.06em',
-                  }}
-                >
-                  {facts.length} fait{facts.length !== 1 ? 's' : ''} ·{' '}
-                  {new Set(facts.map((f) => f.sourceUrl.replace(/^https?:\/\//, '').split('/')[0])).size} publications
-                </span>
-              </div>
-              <BySource dossier={dossier} facts={facts} citations={citations} />
-            </section>
+                  {/* Journal — dated "what's new" notes, newest first */}
+                  <Journal
+                    entries={updates.map((u) => ({
+                      id: u.id,
+                      when: formatDateFr(new Date(u.createdAt)),
+                      body: u.body,
+                      kind: u.kind === 'complement' ? 'complement' : 'actualite',
+                    }))}
+                    citations={citations}
+                  />
+                </CitationsProvider>
+              }
+              documents={
+                <DocumentsGrid documents={documents} slug={dossier.slug} />
+              }
+            />
           </main>
         </div>
       </div>

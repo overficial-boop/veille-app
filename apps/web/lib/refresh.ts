@@ -10,6 +10,9 @@ import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
 import { backfillPublishedAt } from './temporal';
 import { insertFacts } from './dossiers';
 import type { SynthesisProgress } from './synthesis';
+import { upsertDocument, linkFacts, setDocumentCore } from './documents';
+import { analyzeDocumentCore } from './document/analyze';
+import { hostOf } from './host';
 
 // --- Relevance tuning knobs (calibrated empirically; see R3) ---
 const CANDIDATE_SCORE_FLOOR = 0.4;    // drop weaker results — only applied to scored (Tavily) candidates
@@ -70,6 +73,7 @@ export async function refreshDossier(
     onProgress({ type: 'source-start', label: src.label ?? src.connector });
     try {
       let extracted: Fact[] = [];
+      const pendingDocs: { docId: string; url: string; content: string; title: string; siteName?: string; needsCore: boolean }[] = [];
       if (src.kind === 'standing') {
         const cands = await candidatesFor(src);
         // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
@@ -89,20 +93,53 @@ export async function refreshDossier(
           const adapter = findAdapter({ kind: 'url', url: c.url });
           if (!adapter) continue;
           try {
+            let captured = '';
             const top = topFactsPerUrl(
-              await extract(c.url, { language: lang, withSummary: false, subjectHint }),
+              await extract(c.url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
               MAX_FACTS_PER_URL,
             );
             // Backfill publication date from the discovery candidate (Tavily published_date /
             // RSS pubDate) when the adapter didn't find one — improves stream classification.
-            extracted = extracted.concat(top.map((f) => backfillPublishedAt(f, c.publishedAt)));
+            const withDates = top.map((f) => backfillPublishedAt(f, c.publishedAt));
+            extracted = extracted.concat(withDates);
+            const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(c.url);
+            const prov0 = withDates[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
+            const siteName = yt ? (prov0?.channelName || 'youtube.com') : hostOf(c.url);
+            const publishedAt = prov0?.publishedAt
+              ? new Date(prov0.publishedAt)
+              : c.publishedAt ? new Date(c.publishedAt) : null;
+            const title = c.title ?? c.url;
+            const { id: docId, needsCore } = await upsertDocument(dossierId, {
+              url: c.url,
+              title,
+              siteName,
+              kind: yt ? 'youtube' : 'web',
+              publishedAt,
+            });
+            pendingDocs.push({ docId, url: c.url, content: captured, title, siteName, needsCore });
           } catch {
             /* skip a bad candidate URL, keep going */
           }
         }
       } else {
         const url = (src.input as { url: string }).url;
-        extracted = topFactsPerUrl(await extract(url, { language: lang, withSummary: false, subjectHint }), MAX_FACTS_PER_URL);
+        let captured = '';
+        extracted = topFactsPerUrl(
+          await extract(url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
+          MAX_FACTS_PER_URL,
+        );
+        const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(url);
+        const prov0 = extracted[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
+        const siteName = yt ? (prov0?.channelName || 'youtube.com') : hostOf(url);
+        const publishedAt = prov0?.publishedAt ? new Date(prov0.publishedAt) : null;
+        const { id: docId, needsCore } = await upsertDocument(dossierId, {
+          url,
+          title: src.label ?? url,
+          siteName,
+          kind: yt ? 'youtube' : 'web',
+          publishedAt,
+        });
+        pendingDocs.push({ docId, url, content: captured, title: src.label ?? url, siteName, needsCore });
       }
       // Drop facts the model scored as weakly-relevant to the subject (only when we have a
       // subjectHint; unscored facts are KEPT). Applied BEFORE dedup so `seen` tracks only
@@ -119,6 +156,17 @@ export async function refreshDossier(
       await insertFacts(dossierId, src.id, fresh);
       total += fresh.length;
       added += fresh.length;
+      // Link facts to their documents and auto-analyze (review + bullets) for each new document.
+      for (const d of pendingDocs) {
+        await linkFacts(dossierId, d.docId, d.url);
+        if (!d.content || !d.needsCore) continue;
+        try {
+          const core = await analyzeDocumentCore({ content: d.content, title: d.title, siteName: d.siteName, lang });
+          await setDocumentCore(d.docId, core);
+        } catch (e) {
+          onProgress({ type: 'source-error', label: d.url, message: e instanceof Error ? e.message : String(e) });
+        }
+      }
       await db.update(sources).set({ lastExtractedAt: new Date() }).where(eq(sources.id, src.id));
       onProgress({ type: 'facts', sourceLabel: src.label ?? src.connector, added: fresh.length, total });
     } catch (e) {

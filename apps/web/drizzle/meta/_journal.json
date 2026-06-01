@@ -43,6 +43,13 @@
       "when": 1780291331788,
       "tag": "0005_optimal_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780317285139,
+      "tag": "0006_slim_jetstream",
+      "breakpoints": true
     }
   ]
 }

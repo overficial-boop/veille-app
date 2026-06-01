@@ -1,0 +1,1 @@
+ALTER TABLE "dossiers" ADD COLUMN "brief_suggestion_dismissed_at" timestamp with time zone;

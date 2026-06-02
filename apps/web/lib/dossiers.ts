@@ -1,4 +1,4 @@
-import { eq, desc, and, count, inArray } from 'drizzle-orm';
+import { eq, desc, and, count, inArray, isNull, isNotNull } from 'drizzle-orm';
 import { uuidv7, slugify } from '@veille/core';
 import type { Fact } from '@veille/core';
 import type { DossierPlan } from '@veille/discovery';
@@ -157,6 +157,46 @@ export async function setBrief(
   briefRefs: { n: number; url: string; docId: string | null; title: string; host: string }[] = [],
 ) {
   await db.update(dossiers).set({ brief, sourceNotes, briefRefs, briefGeneratedAt: new Date() }).where(eq(dossiers.id, dossierId));
+}
+
+export type JournalEntry = {
+  id: string;
+  text: string;
+  sourceUrl: string;
+  documentId: string | null;
+  journalReason: string | null;
+  journalAt: Date;
+};
+
+/** Facts promoted to the journal, newest first. */
+export async function listJournal(dossierId: string): Promise<JournalEntry[]> {
+  const rows = await db
+    .select({
+      id: facts.id,
+      text: facts.text,
+      sourceUrl: facts.sourceUrl,
+      documentId: facts.documentId,
+      journalReason: facts.journalReason,
+      journalAt: facts.journalAt,
+    })
+    .from(facts)
+    .where(and(eq(facts.dossierId, dossierId), isNotNull(facts.journalAt)))
+    .orderBy(desc(facts.journalAt));
+  return rows.map((r) => ({ ...r, journalAt: r.journalAt as Date }));
+}
+
+/** Stamp the selected facts (this dossier, not already promoted) as journal entries. */
+export async function promoteFactsToJournal(
+  dossierId: string,
+  selections: { factId: string; reason: string }[],
+): Promise<void> {
+  const now = new Date();
+  for (const s of selections) {
+    await db
+      .update(facts)
+      .set({ journalAt: now, journalReason: s.reason })
+      .where(and(eq(facts.id, s.factId), eq(facts.dossierId, dossierId), isNull(facts.journalAt)));
+  }
 }
 
 

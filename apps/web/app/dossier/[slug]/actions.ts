@@ -5,6 +5,7 @@ import { getSession } from '@/lib/session';
 import { setTemplate, addSource, removeSource, getDossier, updateSource } from '@/lib/dossiers';
 import { setDocumentStatus as setDocumentStatusDb } from '@/lib/documents';
 import { composeDossier } from '@/lib/synthesis';
+import { pullAdHoc } from '@/lib/refresh';
 import { resolveYouTubeFeed, fetchFeedTitle, sourceSpecToRow, type AddSourceType, type SourceRow } from '@/lib/source-input';
 
 async function ownerId(): Promise<string | null> {
@@ -97,4 +98,21 @@ export async function generateBriefAction(slug: string, scope?: string[]): Promi
   if (!dossier) return;
   await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr', scope });
   revalidatePath(`/dossier/${slug}`);
+}
+
+export type AdHocPullResult =
+  | { ok: true; kept: number; suggested: number; total: number }
+  | { ok: false; error: string };
+
+/** Mode recherche: one-off ad-hoc pull → new documents land in the feed/suggestions. No source saved. */
+export async function adHocPullAction(slug: string, query: string): Promise<AdHocPullResult> {
+  const id = await ownerId();
+  if (!id) return { ok: false, error: 'Non authentifié.' };
+  const q = query.trim();
+  if (!q) return { ok: false, error: 'Requête vide.' };
+  const dossier = await getDossier(id, slug);
+  if (!dossier) return { ok: false, error: 'Dossier introuvable.' };
+  const res = await pullAdHoc(dossier.id, q, { language: dossier.language ?? 'fr' });
+  revalidatePath(`/dossier/${slug}`);
+  return { ok: true, ...res };
 }

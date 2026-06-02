@@ -12,7 +12,9 @@ import { KeptFeed, SuggestionsTray, GenerateBriefCta } from '@/components/curati
 import { sourceTarget } from '@/lib/source-input';
 import { TopBar } from '@/components/topbar';
 import { StatusPill } from '@/components/veille-ui';
-import { buildCitationNumbers } from '@/lib/citations';
+import { buildHostCitations, buildSourceRows } from '@/lib/citations';
+import { hostOf } from '@/lib/host';
+import { Sources } from '@/components/sources-list';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +40,9 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
     listDocumentsByStatus(dossier.id),
   ]);
   const factUrls = facts.map((f) => f.sourceUrl);
-  const citations = dossier.brief ? buildCitationNumbers(dossier.brief, factUrls) : {};
+  const factHosts = [...new Set(factUrls.map(hostOf))];
+  const hostNumbers = dossier.brief ? buildHostCitations(dossier.brief, factHosts) : {};
+  const sourceRows = dossier.brief ? buildSourceRows(hostNumbers, factUrls, dossier.sourceNotes ?? {}) : [];
   return (
     <div className="shell">
       <TopBar email={session.user.email} />
@@ -95,7 +99,8 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
             {/* Brief — the synthesis (or the prompt to write one), at the top */}
             {dossier.brief ? (
               <CitationsProvider>
-                <Brief brief={dossier.brief} citations={citations} />
+                <Brief brief={dossier.brief} hostNumbers={hostNumbers} />
+                <Sources rows={sourceRows} />
               </CitationsProvider>
             ) : (
               <GenerateBriefCta slug={dossier.slug} />

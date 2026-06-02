@@ -97,9 +97,8 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
             />
           </aside>
 
-          {/* MAIN — one workspace: brief (or CTA), kept feed, suggestions, journal */}
-          <main style={{ minWidth: 0 }}>
-            {/* Brief — the synthesis (or the prompt to write one), at the top */}
+          {/* BRIEF column — the synthesis (or the prompt to write one) */}
+          <main className="dossier-main" style={{ minWidth: 0 }}>
             {dossier.brief ? (
               <CitationsProvider>
                 <Brief brief={dossier.brief} refs={briefRefs} hostNumbers={hostNumbers} />
@@ -108,14 +107,13 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
             ) : (
               <GenerateBriefCta slug={dossier.slug} />
             )}
-
-            {/* Kept documents — the curated body of the dossier */}
-            <KeptFeed slug={dossier.slug} documents={kept} />
-
-            {/* Suggestions — lower-confidence candidates to triage (hidden if none) */}
-            <SuggestionsTray slug={dossier.slug} documents={suggestions} />
-
           </main>
+
+          {/* DOCUMENTS column — the curated body + suggestions to triage */}
+          <div className="dossier-docs" style={{ minWidth: 0 }}>
+            <KeptFeed slug={dossier.slug} documents={kept} />
+            <SuggestionsTray slug={dossier.slug} documents={suggestions} />
+          </div>
         </div>
       </div>
     </div>

@@ -1,13 +1,15 @@
 import type { Segment } from '@veille/core';
 
 /**
- * Split text into paragraph segments. Paragraphs are runs separated by one or
- * more blank lines (a blank line being whitespace-only). Returns one Segment
- * per non-empty paragraph, with `start === end === paragraphIndex` (matching
- * the paragraph-index locator scheme used by the web adapter).
+ * Split text into paragraph segments — one Segment per line, separated by ANY run of newlines
+ * (single or blank-line). This matches how stored content is produced: the pipeline joins the web
+ * adapter's per-block paragraphs with a single `\n` (`segments.map(s => s.text).join('\n')`), so a
+ * single newline IS a paragraph boundary here. Splitting only on blank lines collapsed such content
+ * into one giant segment, which made the LLM's paragraph locators resolve to the whole article or
+ * to nothing. Each non-empty line → `{ start === end === paragraphIndex }`.
  */
 export function segmentByParagraph(content: string): Segment[] {
-  const paragraphs = content.split(/\n[\t ]*\n+/);
+  const paragraphs = content.split(/[ \t\r]*\n[ \t\r\n]*/);
   const segments: Segment[] = [];
   let idx = 0;
   for (const raw of paragraphs) {

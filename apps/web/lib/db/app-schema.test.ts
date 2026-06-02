@@ -7,7 +7,7 @@ describe('app schema', () => {
       expect.arrayContaining(['id', 'ownerId', 'intent', 'template', 'cadence', 'status']),
     );
     expect(Object.keys(sources)).toEqual(
-      expect.arrayContaining(['id', 'dossierId', 'connector', 'kind', 'input', 'lastExtractedAt']),
+      expect.arrayContaining(['id', 'dossierId', 'connector', 'kind', 'input', 'purpose', 'lastExtractedAt']),
     );
     expect(Object.keys(facts)).toEqual(
       expect.arrayContaining([

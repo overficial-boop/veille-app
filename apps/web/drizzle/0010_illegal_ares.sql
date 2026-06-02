@@ -1,0 +1,1 @@
+ALTER TABLE "sources" ADD COLUMN "purpose" text DEFAULT 'state' NOT NULL;

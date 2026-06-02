@@ -39,7 +39,8 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
     listUpdates(dossier.id),
     listDocumentsByStatus(dossier.id),
   ]);
-  const citations = buildCitationNumbers(dossier.brief, facts.map((f) => f.sourceUrl));
+  const factUrls = facts.map((f) => f.sourceUrl);
+  const citations = dossier.brief ? buildCitationNumbers(dossier.brief, factUrls) : {};
   return (
     <div className="shell">
       <TopBar email={session.user.email} />
@@ -92,29 +93,29 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
 
           {/* MAIN — one workspace: brief (or CTA), kept feed, suggestions, journal */}
           <main style={{ minWidth: 0 }}>
-            <CitationsProvider>
-              {/* Brief — the synthesis (or the prompt to write one), at the top */}
-              {dossier.brief ? (
+            {/* Brief — the synthesis (or the prompt to write one), at the top */}
+            {dossier.brief ? (
+              <CitationsProvider>
                 <Brief brief={dossier.brief} citations={citations} />
-              ) : (
-                <GenerateBriefCta slug={dossier.slug} />
-              )}
+              </CitationsProvider>
+            ) : (
+              <GenerateBriefCta slug={dossier.slug} />
+            )}
 
-              {/* Kept documents — the curated body of the dossier */}
-              <KeptFeed slug={dossier.slug} documents={kept} />
+            {/* Kept documents — the curated body of the dossier */}
+            <KeptFeed slug={dossier.slug} documents={kept} />
 
-              {/* Suggestions — lower-confidence candidates to triage (hidden if none) */}
-              <SuggestionsTray slug={dossier.slug} documents={suggestions} />
+            {/* Suggestions — lower-confidence candidates to triage (hidden if none) */}
+            <SuggestionsTray slug={dossier.slug} documents={suggestions} />
 
-              {/* Journal — dated "what's new" notes, newest first */}
-              <Journal
-                entries={updates.map((u) => ({
-                  id: u.id,
-                  when: formatDateFr(new Date(u.createdAt)),
-                  body: u.body,
-                }))}
-              />
-            </CitationsProvider>
+            {/* Journal — dated "what's new" notes, newest first */}
+            <Journal
+              entries={updates.map((u) => ({
+                id: u.id,
+                when: formatDateFr(new Date(u.createdAt)),
+                body: u.body,
+              }))}
+            />
           </main>
         </div>
       </div>

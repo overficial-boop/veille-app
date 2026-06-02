@@ -500,18 +500,6 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 .type-opt .ex { font-size: var(--t-xs); color: var(--ink-3); margin-top: .1rem; }
 .dialog-foot { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.3rem; }
 
-/* ---------------- TABS (dossier page) ---------------- */
-.tabs { display: flex; gap: .3rem; margin: 1.5rem 0 0; border-bottom: 1px solid var(--line); padding-bottom: 0; }
-.tab {
-  font-family: var(--font-sans); font-size: var(--t-sm); font-weight: 600;
-  color: var(--ink-3); background: transparent; border: none; cursor: pointer;
-  padding: .5rem .9rem; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color .14s, border-color .14s, background .14s;
-}
-.tab:hover { color: var(--ink); background: var(--surface-2); }
-.tab-active { color: var(--ink); border-bottom-color: var(--accent); }
-
 /* ---------------- DOCUMENT GRID ---------------- */
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
 .doc-card { display: flex; flex-direction: column; gap: .5rem; padding: 1rem 1.15rem; text-decoration: none; }

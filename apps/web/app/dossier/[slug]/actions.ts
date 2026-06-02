@@ -91,9 +91,9 @@ export async function setDocumentStatus(
 }
 
 export async function generateBriefAction(slug: string, scope?: string[]): Promise<void> {
-  const session = await getSession();
-  if (!session) return;
-  const dossier = await getDossier(session.user.id, slug);
+  const id = await ownerId();
+  if (!id) return;
+  const dossier = await getDossier(id, slug);
   if (!dossier) return;
   await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr', scope });
   revalidatePath(`/dossier/${slug}`);

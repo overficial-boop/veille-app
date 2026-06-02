@@ -83,14 +83,6 @@ export async function linkFacts(dossierId: string, documentId: string, url: stri
     .where(and(eq(facts.dossierId, dossierId), eq(facts.sourceUrl, url), isNull(facts.documentId)));
 }
 
-export async function listDocuments(dossierId: string) {
-  return db
-    .select()
-    .from(documents)
-    .where(eq(documents.dossierId, dossierId))
-    .orderBy(documents.createdAt);
-}
-
 export async function getDocument(dossierId: string, id: string) {
   const [d] = await db
     .select()
@@ -99,16 +91,12 @@ export async function getDocument(dossierId: string, id: string) {
   return d ?? null;
 }
 
-export type Doc = Awaited<ReturnType<typeof listDocuments>>[number];
-
 /**
  * The curated split for the workspace: every non-rejected document, partitioned by status.
  * Kept docs lead with the most relevant (relevance desc, NULLs last) then most recent;
  * suggestions order by relevance desc so the strongest candidates surface first.
  */
-export async function listDocumentsByStatus(
-  dossierId: string,
-): Promise<{ kept: Doc[]; suggestions: Doc[] }> {
+export async function listDocumentsByStatus(dossierId: string) {
   const rows = await db
     .select()
     .from(documents)
@@ -118,6 +106,8 @@ export async function listDocumentsByStatus(
   const suggestions = rows.filter((r) => r.status === 'suggestion');
   return { kept, suggestions };
 }
+
+export type Doc = Awaited<ReturnType<typeof listDocumentsByStatus>>['kept'][number];
 
 /** Set a document's curation status (kept | suggestion | rejected). */
 export async function setDocumentStatus(

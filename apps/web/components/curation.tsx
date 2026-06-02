@@ -73,6 +73,8 @@ export function KeptFeed({ slug, documents }: { slug: string; documents: Doc[] }
   const [isPending, startTransition] = React.useTransition();
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
+  React.useEffect(() => { if (!isPending) setBusyId(null); }, [isPending]);
+
   function reject(e: React.MouseEvent, docId: string) {
     e.preventDefault();
     e.stopPropagation();
@@ -142,7 +144,7 @@ export function KeptFeed({ slug, documents }: { slug: string; documents: Doc[] }
                     title="Écarter ce document"
                     aria-label={`Écarter ${d.title ?? d.url}`}
                     onClick={(e) => reject(e, d.id)}
-                    disabled={isPending && busyId === d.id}
+                    disabled={isPending}
                   >
                     <X />
                   </button>
@@ -182,6 +184,8 @@ export function SuggestionsTray({ slug, documents }: { slug: string; documents: 
   const [isPending, startTransition] = React.useTransition();
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
+  React.useEffect(() => { if (!isPending) setBusyId(null); }, [isPending]);
+
   if (documents.length === 0) return null;
 
   function curate(docId: string, status: 'kept' | 'rejected') {
@@ -202,9 +206,9 @@ export function SuggestionsTray({ slug, documents }: { slug: string; documents: 
       <div className="suggest-list">
         {documents.map((d) => {
           const siteLabel = d.siteName ?? hostOf(d.url);
-          const busy = isPending && busyId === d.id;
+          const busy = busyId === d.id;
           return (
-            <div key={d.id} className="suggest-row">
+            <div key={d.id} className={`suggest-row${busy && isPending ? ' suggest-row-busy' : ''}`}>
               <Link href={`/dossier/${slug}/d/${d.id}`} className="suggest-main">
                 <span className="suggest-title">{d.title ?? d.url}</span>
                 <span className="suggest-meta">
@@ -218,7 +222,7 @@ export function SuggestionsTray({ slug, documents }: { slug: string; documents: 
                   size="sm"
                   icon={Check}
                   onClick={() => curate(d.id, 'kept')}
-                  disabled={busy}
+                  disabled={isPending}
                 >
                   Garder
                 </Btn>
@@ -227,7 +231,7 @@ export function SuggestionsTray({ slug, documents }: { slug: string; documents: 
                   size="sm"
                   icon={X}
                   onClick={() => curate(d.id, 'rejected')}
-                  disabled={busy}
+                  disabled={isPending}
                   aria-label={`Écarter ${d.title ?? d.url}`}
                 >
                   Écarter

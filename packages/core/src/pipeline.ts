@@ -101,6 +101,10 @@ export async function runFactExtraction(
   // Surface the cleaned source text once, for downstream analysis (additive, opt-in).
   hints?.onContent?.(segments.map((s) => s.text).join('\n'));
 
+  if (hints?.contentOnly) {
+    return { facts: [], summary: '', cost: { model: 'content-only', inputTokens: 0, outputTokens: 0 } };
+  }
+
   const extractedAt = new Date().toISOString();
 
   const perChunk = async (

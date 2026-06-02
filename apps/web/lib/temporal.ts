@@ -12,7 +12,7 @@ export function parseDate(s: unknown): Date | null {
 
 /** A fact's PUBLICATION date from provenance.publishedAt — or null if unknown.
  *  Unlike factDate() (display), this does NOT fall back to extractedAt: an unknown
- *  publication date must stay unknown so the fact classifies as a "complément". */
+ *  publication date must stay unknown so recency filtering treats it conservatively. */
 export function factPublishedAt(fact: { provenance: unknown }): Date | null {
   const p = fact.provenance as { publishedAt?: unknown } | null;
   return p ? parseDate(p.publishedAt) : null;

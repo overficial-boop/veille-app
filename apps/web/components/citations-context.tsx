@@ -4,9 +4,9 @@ import * as React from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 /**
- * Shared "show sources" state for the synthesis column. The brief and the journal
- * both read this, so one toggle reveals/hides the numbered citation superscripts
- * across both sections at once (consistent reading experience).
+ * Shared "show sources" state for the brief's numbered citation superscripts: the toggle
+ * reveals/hides them. (The journal is a plain single-stream prose feed and does not read
+ * this — sources for journal items live in the Documents tab.)
  */
 type CitationsCtx = { show: boolean; toggle: () => void };
 

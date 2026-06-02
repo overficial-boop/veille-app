@@ -73,9 +73,8 @@ function CostLine({ cost }: { cost: TokenCost }) {
 export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: DocumentFicheProps) {
   const router = useRouter();
 
-  // Review/bullets/summary are generated on demand (the assemble no longer does it inline), so they
+  // Review/bullets are generated on demand (the assemble no longer does it inline), so they
   // live in state: seeded from the server, then filled in when generation completes.
-  const [shortSummary, setShortSummary] = React.useState<string | null>(doc.shortSummary);
   const [review, setReview] = React.useState<ReviewBlock | null>(doc.review);
   const [bullets, setBullets] = React.useState<BulletsBlock | null>(doc.bullets);
   const [analyzing, setAnalyzing] = React.useState(false);
@@ -103,7 +102,6 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
         setAnalyzeError(msg || 'Erreur inconnue');
       } else {
         const core = (await res.json()) as { shortSummary: string; review: ReviewBlock; bullets: BulletsBlock };
-        setShortSummary(core.shortSummary);
         setReview(core.review);
         setBullets(core.bullets);
       }
@@ -211,13 +209,8 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
   return (
     <div className="fiche-grid">
 
-      {/* ── Main column: résumé + review + en bref ── */}
+      {/* ── Main column: review + en bref + aller plus loin ── */}
       <div className="fiche-main">
-
-        {/* Résumé court */}
-        {shortSummary && (
-          <p className="fiche-lead">{shortSummary}</p>
-        )}
 
         {/* Review */}
         <section className="section" style={{ marginTop: '2rem' }}>
@@ -269,11 +262,6 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
             <CostLine cost={bullets.cost} />
           </section>
         )}
-
-      </div>
-
-      {/* ── Side column: aller plus loin + faits ── */}
-      <div className="fiche-side">
 
         {/* Aller plus loin */}
         <section className="section" style={{ marginTop: '2rem' }}>
@@ -349,6 +337,11 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
             </div>
           )}
         </section>
+
+      </div>
+
+      {/* ── Side column: just the facts ── */}
+      <div className="fiche-side">
 
         {/* Faits */}
         <section className="section" style={{ marginTop: '2rem' }}>

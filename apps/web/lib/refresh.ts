@@ -44,9 +44,12 @@ function topFactsPerUrl(urlFacts: Fact[], n: number): Fact[] {
 
 export async function refreshDossier(
   dossierId: string,
-  opts: { force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void; phase?: 'assemble' | 'refresh' } = {},
+  opts: { phase?: 'assemble' | 'refresh'; force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void } = {},
 ): Promise<{ total: number; added: number }> {
   registerAllAdapters();
+  // Depth knobs come from config. Only the candidate cap varies by phase — assemble goes
+  // deep (more URLs per source), refresh stays shallow; the floors + max-facts-per-url are
+  // phase-independent (read directly from cfg).
   const cfg = getRefreshConfig();
   const phase = opts.phase ?? 'refresh';
   const candidatesPerSource = phase === 'assemble' ? cfg.assembleCandidatesPerSource : cfg.refreshCandidatesPerSource;

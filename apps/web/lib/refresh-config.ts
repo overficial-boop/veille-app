@@ -9,6 +9,9 @@ export type RefreshConfig = {
   maxFactsPerUrl: number;
 };
 
+// The floors + cap (candidateScoreFloor 0.4, factRelevanceFloor 0.5, maxFactsPerUrl 20)
+// were empirically calibrated against live dossiers (the "relevance pass"); don't change
+// them blindly. The candidate counts set first-run depth (10) vs ongoing refresh depth (6).
 const DEFAULTS: RefreshConfig = {
   plannerMaxQueries: 5,
   assembleCandidatesPerSource: 10,

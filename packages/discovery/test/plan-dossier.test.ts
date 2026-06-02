@@ -6,35 +6,48 @@ const fakeClient = (json: object): LlmClient =>
   ({ complete: async () => ({ text: JSON.stringify(json), model: 'fake' }) } as unknown as LlmClient);
 
 describe('planDossier', () => {
-  it('classifies a chronology intent and caps sources at 3', async () => {
+  it('tags state queries state and watch queries watch (with news topic + days)', async () => {
     const client = fakeClient({
       subjectName: "l'affaire X",
       template: 'chronology',
-      queries: [
+      stateQueries: [
         { query: 'affaire X chronologie', rationale: 'r' },
         { query: 'affaire X faits', rationale: 'r' },
-        { query: 'affaire X procès', rationale: 'r' },
-        { query: 'affaire X extra', rationale: 'r' },
       ],
+      watchQueries: [{ query: 'affaire X dernières actualités', rationale: 'r' }],
     });
     const plan = await planDossier({ intent: 'une chronologie de l’affaire X', language: 'fr', client });
-    expect(plan.template).toBe('chronology');
-    expect(plan.subjectName).toBe("l'affaire X");
-    expect(plan.sources.filter((s) => s.connector === 'tavily')).toHaveLength(3); // capped
-    expect(plan.sources.every((s) => s.kind === 'standing')).toBe(true);
+    const tavily = plan.sources.filter((s) => s.connector === 'tavily');
+    const state = tavily.filter((s) => s.purpose === 'state');
+    const watch = tavily.filter((s) => s.purpose === 'watch');
+    expect(state).toHaveLength(2);
+    expect(watch).toHaveLength(1);
+    // watch sources are news-flavoured with a recency window
+    expect((watch[0]!.input as { topic?: string }).topic).toBe('news');
+    expect((watch[0]!.input as { days?: number }).days).toBeGreaterThan(0);
+    expect(tavily.every((s) => s.kind === 'standing')).toBe(true);
+  });
+
+  it('caps each set at maxQueries independently', async () => {
+    const five = (p: string) => Array.from({ length: 5 }, (_, i) => ({ query: `${p}${i}`, rationale: 'r' }));
+    const client = fakeClient({ subjectName: 'X', template: 'feed', stateQueries: five('s'), watchQueries: five('w') });
+    const plan = await planDossier({ intent: 'suivre X', language: 'fr', client, maxQueries: 3 });
+    expect(plan.sources.filter((s) => s.purpose === 'state')).toHaveLength(3);
+    expect(plan.sources.filter((s) => s.purpose === 'watch')).toHaveLength(3);
   });
 
   it('keyword guardrail forces chronology even if the model says profile', async () => {
-    const client = fakeClient({ subjectName: 'X', template: 'profile', queries: [{ query: 'q', rationale: 'r' }] });
+    const client = fakeClient({ subjectName: 'X', template: 'profile', stateQueries: [{ query: 'q', rationale: 'r' }], watchQueries: [] });
     const plan = await planDossier({ intent: 'chronologie des faits', language: 'fr', client });
     expect(plan.template).toBe('chronology');
   });
 
   it('adds explicit URLs in the intent as item sources, on top of the cap', async () => {
-    const client = fakeClient({ subjectName: 'X', template: 'feed', queries: [{ query: 'q', rationale: 'r' }] });
+    const client = fakeClient({ subjectName: 'X', template: 'feed', stateQueries: [{ query: 'q', rationale: 'r' }], watchQueries: [] });
     const plan = await planDossier({ intent: 'suivre https://example.com/article X', language: 'fr', client });
     const items = plan.sources.filter((s) => s.kind === 'item');
     expect(items).toHaveLength(1);
     expect(items[0]!.input).toEqual({ url: 'https://example.com/article' });
+    expect(items[0]!.purpose).toBe('state');
   });
 });

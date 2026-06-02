@@ -71,6 +71,13 @@
       "when": 1780393774934,
       "tag": "0009_thankful_bastion",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780403082369,
+      "tag": "0010_illegal_ares",
+      "breakpoints": true
     }
   ]
 }

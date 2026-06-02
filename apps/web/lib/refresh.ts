@@ -9,7 +9,8 @@ import { freshCandidates } from './dedup';
 import { isRecentCandidate } from './temporal';
 import { upsertDocument } from './documents';
 import { hostOf } from './host';
-import { getRefreshConfig } from './refresh-config';
+import { getRefreshConfig, type RefreshConfig } from './refresh-config';
+import { sourcesForPhase } from './source-phase';
 import { scoreRelevance } from './relevance';
 import type { SynthesisProgress } from './synthesis';
 
@@ -31,6 +32,41 @@ async function candidatesFor(source: SourceRow, daysOverride?: number): Promise<
   if (source.connector === 'rss') return discoverRss(source.input as never);
   if (source.connector === 'youtube-channel') return discoverYouTubeChannel(source.input as never);
   return [];
+}
+
+/** Everything a single-candidate pull needs, independent of phase/source. */
+type PullCtx = { dossierId: string; intent: string; language: string; cfg: RefreshConfig };
+
+/** Fetch content-only, score relevance, upsert a curated document (no fact extraction).
+ *  Returns the curation status for progress reporting. Shared by the refresh loop and the
+ *  ad-hoc pull (mode recherche). */
+async function processCandidate(
+  ctx: PullCtx,
+  url: string,
+  candPublishedAt: string | undefined,
+  candTitle: string | undefined,
+): Promise<'kept' | 'suggestion'> {
+  let captured = '';
+  await extract(url, { language: ctx.language, contentOnly: true, onContent: (t) => { captured = t; } });
+  const rel = captured
+    ? await scoreRelevance({ title: candTitle ?? url, content: captured, intent: ctx.intent, language: ctx.language, contentBudget: ctx.cfg.relevanceContentBudget })
+    : { score: 0, reason: 'contenu indisponible' };
+  const status: 'kept' | 'suggestion' = rel.score >= ctx.cfg.relevanceKeepFloor ? 'kept' : 'suggestion';
+  const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(url);
+  const siteName = yt ? 'youtube.com' : hostOf(url);
+  const publishedAt = candPublishedAt ? new Date(candPublishedAt) : null;
+  await upsertDocument(ctx.dossierId, {
+    url,
+    title: candTitle ?? url,
+    siteName,
+    kind: yt ? 'youtube' : 'web',
+    publishedAt,
+    content: captured,
+    status,
+    relevance: rel.score,
+    relevanceReason: rel.reason,
+  });
+  return status;
 }
 
 export async function refreshDossier(
@@ -63,44 +99,16 @@ export async function refreshDossier(
     ? Math.max(1, Math.ceil((Date.now() - lastRefresh.getTime()) / 86_400_000))
     : undefined;
 
-  const srcRows = await db.select().from(sources).where(eq(sources.dossierId, dossierId));
+  const allRows = await db.select().from(sources).where(eq(sources.dossierId, dossierId));
+  const srcRows = sourcesForPhase(allRows, phase);
   // Seed seen-URLs from documents already pulled, so re-runs (refresh / re-assemble) skip them
   // instead of re-fetching + re-scoring (each candidate costs a fetch + a relevance LLM call).
   const existingDocs = await db.select({ url: documents.url }).from(documents).where(eq(documents.dossierId, dossierId));
   const seenUrls = new Set(existingDocs.map((d) => d.url));
+  // Shared per-candidate context (richer "name — intent" hint preferred for relevance scoring).
+  const ctx: PullCtx = { dossierId, intent: subjectHint || dossier?.intent || '', language: lang, cfg };
   let kept = 0;
   let suggested = 0;
-
-  // Fetch content-only, score relevance, and upsert a curated document (no fact extraction).
-  // Facts are on-demand (a later task). Returns the curation status for progress reporting.
-  async function processCandidate(
-    url: string,
-    candPublishedAt: string | undefined,
-    candTitle: string | undefined,
-  ): Promise<'kept' | 'suggestion'> {
-    let captured = '';
-    await extract(url, { language: lang, contentOnly: true, onContent: (t) => { captured = t; } });
-    const intent = subjectHint || dossier?.intent || ''; // prefer the richer "name — intent" hint
-    const rel = captured
-      ? await scoreRelevance({ title: candTitle ?? url, content: captured, intent, language: lang, contentBudget: cfg.relevanceContentBudget })
-      : { score: 0, reason: 'contenu indisponible' };
-    const status: 'kept' | 'suggestion' = rel.score >= cfg.relevanceKeepFloor ? 'kept' : 'suggestion';
-    const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(url);
-    const siteName = yt ? 'youtube.com' : hostOf(url);
-    const publishedAt = candPublishedAt ? new Date(candPublishedAt) : null;
-    await upsertDocument(dossierId, {
-      url,
-      title: candTitle ?? url,
-      siteName,
-      kind: yt ? 'youtube' : 'web',
-      publishedAt,
-      content: captured,
-      status,
-      relevance: rel.score,
-      relevanceReason: rel.reason,
-    });
-    return status;
-  }
 
   for (const src of srcRows) {
     const needs = src.kind === 'standing' || !src.lastExtractedAt || opts.force;
@@ -128,7 +136,7 @@ export async function refreshDossier(
         for (const c of freshCandidates(recencyFiltered, seenUrls)) {
           if (!findAdapter({ kind: 'url', url: c.url })) continue;
           try {
-            const status = await processCandidate(c.url, c.publishedAt, c.title);
+            const status = await processCandidate(ctx, c.url, c.publishedAt, c.title);
             if (status === 'kept') kept++; else suggested++;
             onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: c.title ?? c.url, status, kept, total: kept + suggested });
           } catch {
@@ -139,7 +147,7 @@ export async function refreshDossier(
         const url = (src.input as { url: string }).url;
         const title = src.label ?? undefined;
         try {
-          const status = await processCandidate(url, undefined, title);
+          const status = await processCandidate(ctx, url, undefined, title);
           if (status === 'kept') kept++; else suggested++;
           onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: title ?? url, status, kept, total: kept + suggested });
         } catch {
@@ -155,5 +163,47 @@ export async function refreshDossier(
 
   await db.update(dossiers).set({ refreshedAt: new Date(), status: 'active' }).where(eq(dossiers.id, dossierId));
   onProgress({ type: 'done', total: kept + suggested });
+  return { kept, suggested, total: kept + suggested };
+}
+
+/** One-off ad-hoc pull (mode recherche): runs the curate pipeline over a single Tavily query and
+ *  lands documents in the feed/suggestions by the usual relevance floor. Creates NO source and does
+ *  NOT advance refreshedAt — it only grows the curated set. Dedups against existing document URLs. */
+export async function pullAdHoc(
+  dossierId: string,
+  query: string,
+  opts: { language?: string } = {},
+): Promise<{ kept: number; suggested: number; total: number }> {
+  registerAllAdapters();
+  const q = query.trim();
+  if (!q) return { kept: 0, suggested: 0, total: 0 };
+  const cfg = getRefreshConfig();
+  const lang = opts.language ?? 'fr';
+
+  const [dossier] = await db.select().from(dossiers).where(eq(dossiers.id, dossierId));
+  if (!dossier) return { kept: 0, suggested: 0, total: 0 };
+  const subjectHint = [dossier.name, dossier.intent].filter(Boolean).join(' — ');
+  const ctx: PullCtx = { dossierId, intent: subjectHint || dossier.intent || '', language: lang, cfg };
+
+  const existingDocs = await db.select({ url: documents.url }).from(documents).where(eq(documents.dossierId, dossierId));
+  const seenUrls = new Set(existingDocs.map((d) => d.url));
+
+  const cands = (await discoverTavily({ query: q })).filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
+  const ranked = [...cands]
+    .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, cfg.assembleCandidatesPerSource);
+
+  let kept = 0;
+  let suggested = 0;
+  for (const c of freshCandidates(ranked, seenUrls)) {
+    if (!findAdapter({ kind: 'url', url: c.url })) continue;
+    try {
+      const status = await processCandidate(ctx, c.url, c.publishedAt, c.title);
+      if (status === 'kept') kept++; else suggested++;
+    } catch {
+      /* skip a bad candidate URL, keep going */
+    }
+  }
   return { kept, suggested, total: kept + suggested };
 }

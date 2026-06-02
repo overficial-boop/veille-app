@@ -81,6 +81,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
                 id: s.id,
                 connector: s.connector,
                 kind: s.kind,
+                purpose: s.purpose,
                 label: s.label,
                 source: s.input.source,
                 target: sourceTarget(s.connector, s.input),

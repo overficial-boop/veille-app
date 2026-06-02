@@ -25,6 +25,7 @@ export function sourceTarget(connector: string, input: SourceInput | null | unde
 export type SourceRow = {
   connector: string;
   kind: 'item' | 'standing';
+  purpose: 'state' | 'watch';
   input: Record<string, unknown>;
   label: string;
 };
@@ -54,13 +55,13 @@ export function sourceSpecToRow(
   const v = value.trim();
   switch (type) {
     case 'web':
-      return { connector: 'web', kind: 'item', input: { url: v }, label: v };
+      return { connector: 'web', kind: 'item', purpose: 'state', input: { url: v }, label: v };
     case 'search':
-      return { connector: 'tavily', kind: 'standing', input: { query: v }, label: v };
+      return { connector: 'tavily', kind: 'standing', purpose: 'watch', input: { query: v }, label: v };
     case 'rss':
-      return { connector: 'rss', kind: 'standing', input: { feedUrl: resolved?.feedUrl ?? v }, label: resolved?.label?.trim() || v };
+      return { connector: 'rss', kind: 'standing', purpose: 'watch', input: { feedUrl: resolved?.feedUrl ?? v }, label: resolved?.label?.trim() || v };
     case 'youtube':
-      return { connector: 'rss', kind: 'standing', input: { feedUrl: resolved?.feedUrl ?? v, source: 'youtube' }, label: resolved?.label?.trim() || v };
+      return { connector: 'rss', kind: 'standing', purpose: 'watch', input: { feedUrl: resolved?.feedUrl ?? v, source: 'youtube' }, label: resolved?.label?.trim() || v };
     default: {
       const _e: never = type;
       return _e;

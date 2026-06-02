@@ -257,16 +257,25 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
   );
 
   // Auto-start assembly exactly once when the dossier is still building.
-  // Empty deps + a started-ref so React strict-mode's double-invoke can't
-  // open two streams. After `done`, router.refresh() refetches server data and
-  // reconciles this island IN PLACE (no remount); startedRef persists across
-  // the re-render and the deps are [], so the effect never re-fires.
+  // The start is DEFERRED to a macrotask: under React strict-mode (dev), the effect
+  // runs mount→cleanup→mount synchronously. Opening the EventSource in the mount body
+  // would have the cleanup close it before its request is even dispatched, and the
+  // started-ref would then block the surviving mount from reopening — leaving the
+  // dossier stuck "building" (the assemble request never reaches the server). Scheduling
+  // via setTimeout lets the throwaway first mount's cleanup cancel the timer; only the
+  // surviving mount actually opens the stream, and startedRef is set when it fires (not
+  // before) so the guard still prevents a double-open. After `done`, router.refresh()
+  // reconciles this island IN PLACE (no remount), so the effect never re-fires.
   React.useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (status === 'building' && !startedRef.current) {
-      startedRef.current = true;
-      run(`/api/dossiers/${slug}/assemble`);
+      timer = setTimeout(() => {
+        startedRef.current = true;
+        run(`/api/dossiers/${slug}/assemble`);
+      }, 0);
     }
     return () => {
+      if (timer !== undefined) clearTimeout(timer);
       closeStream();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

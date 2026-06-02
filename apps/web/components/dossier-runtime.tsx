@@ -20,6 +20,7 @@ import { Btn, StatusPill, SourceBadge } from '@/components/veille-ui';
 import type { SynthesisProgress } from '@/lib/synthesis';
 import {
   addSourceAction,
+  adHocPullAction,
   removeSourceAction,
   regenerateBriefAction,
   generateBriefAction,
@@ -96,6 +97,7 @@ type SourceLite = {
   id: string;
   connector: string;
   kind: string;
+  purpose?: string;
   label: string | null;
   source?: string;
   target?: string;
@@ -384,7 +386,8 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
         ) : null}
       </div>
 
-      {/* Sources */}
+      {/* Mode recherche — ad-hoc pull, then Sources */}
+      <ModeRecherche slug={slug} />
       <SourcesPanel slug={slug} sources={sources} />
     </>
   );
@@ -426,6 +429,54 @@ function ProgressRow({ line }: { line: ProgressLine }) {
       )}
       <span className="pname">{line.label}</span>
       <span className="pstate">{stateText}</span>
+    </div>
+  );
+}
+
+/** Mode recherche — a one-off ad-hoc pull. Grows the curated set from a manual query without
+ *  saving a standing source; new documents appear in the feed/suggestions after the refresh. */
+function ModeRecherche({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [query, setQuery] = React.useState('');
+  const [pending, startPull] = React.useTransition();
+  const [note, setNote] = React.useState<string | null>(null);
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    setNote(null);
+    startPull(async () => {
+      const res = await adHocPullAction(slug, q);
+      if (!res.ok) {
+        setNote(res.error);
+        return;
+      }
+      setQuery('');
+      setNote(res.total === 0 ? 'Aucun résultat.' : `${res.total} ${res.total === 1 ? 'document ajouté' : 'documents ajoutés'}.`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="card rech" style={{ marginBottom: '1rem' }}>
+      <h3 style={{ margin: '0 0 .5rem' }}>Mode recherche</h3>
+      <form onSubmit={submit} style={{ display: 'flex', gap: '.4rem' }}>
+        <input
+          className="field"
+          value={query}
+          placeholder="Une recherche ponctuelle…"
+          onChange={(e) => setQuery(e.target.value)}
+          disabled={pending}
+          style={{ flex: 1, minWidth: 0 }}
+        />
+        <Btn type="submit" variant="primary" size="sm" icon={Search} disabled={!query.trim() || pending}>
+          {pending ? 'Recherche…' : 'Chercher'}
+        </Btn>
+      </form>
+      {note ? (
+        <p style={{ marginTop: '.5rem', fontSize: 'var(--t-sm)', color: 'var(--ink-3)', fontStyle: 'italic' }}>{note}</p>
+      ) : null}
     </div>
   );
 }
@@ -588,6 +639,12 @@ function SourcesPanel({ slug, sources }: { slug: string; sources: SourceLite[] }
                           <SourceBadge connector={s.connector} source={s.source} />
                         </span>
                       </div>
+                      {s.kind === 'standing' && s.purpose ? (
+                        <div className="kv">
+                          <span className="k">Rôle</span>
+                          <span className="v">{s.purpose === 'watch' ? 'Veille' : 'État'}</span>
+                        </div>
+                      ) : null}
                       <div className="kv">
                         <span className="k">Cible</span>
                         <span className="v">{s.target || '—'}</span>

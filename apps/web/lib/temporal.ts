@@ -1,5 +1,5 @@
 /**
- * Temporal helpers for the two-stream journal. Pure (no db/env) so they're unit-testable
+ * Temporal helpers. Pure (no db/env) so they're unit-testable
  * and safe to import from synthesis.ts without triggering env validation.
  */
 
@@ -16,17 +16,6 @@ export function parseDate(s: unknown): Date | null {
 export function factPublishedAt(fact: { provenance: unknown }): Date | null {
   const p = fact.provenance as { publishedAt?: unknown } | null;
   return p ? parseDate(p.publishedAt) : null;
-}
-
-export type Stream = 'actualite' | 'complement';
-
-/** Classify a newly-found fact as recent news ("actualite") vs older backfill ("complement"),
- *  relative to the cutoff (previous refresh/update boundary). Unknown date → complement.
- *  Null cutoff (first update) → actualite (nothing prior to compare against). */
-export function classify(fact: { provenance: unknown }, cutoff: Date | null): Stream {
-  if (cutoff === null) return 'actualite';
-  const pub = factPublishedAt(fact);
-  return pub !== null && pub > cutoff ? 'actualite' : 'complement';
 }
 
 /** Backfill a fact's provenance.publishedAt from a discovery candidate's date when the
@@ -51,15 +40,3 @@ export function isRecentCandidate(publishedAt: string | undefined, lastRefresh: 
   return d === null || d > lastRefresh;
 }
 
-/** Count facts that should prompt a brief rebuild: published before the brief was built
- *  (classify → 'complement', incl. unknown dates) AND found since the brief / since the
- *  last snooze. Returns 0 when no brief exists yet. Pure (testable). */
-export function countPendingRebuild(
-  facts: { createdAt: Date; provenance: unknown }[],
-  briefGeneratedAt: Date | null,
-  dismissedAt: Date | null,
-): number {
-  if (!briefGeneratedAt) return 0;
-  const floor = dismissedAt && dismissedAt > briefGeneratedAt ? dismissedAt : briefGeneratedAt;
-  return facts.filter((f) => f.createdAt > floor && classify(f, briefGeneratedAt) === 'complement').length;
-}

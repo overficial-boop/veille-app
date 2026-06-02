@@ -1,3 +1,5 @@
+import { hostOf } from './host';
+
 /** Markdown link `[text](http…url)`, tolerating one level of balanced parens in the URL. */
 export const LINK_RE = /\[[^\]]+\]\((https?:\/\/(?:[^()\s]|\([^()\s]*\))*)\)/g;
 
@@ -23,4 +25,51 @@ export function buildCitationNumbers(
     if (u && !(u in map)) map[u] = ++n;
   }
   return map;
+}
+
+/** Inner tokens of each `[a, b]` group, EXCLUDING real `[text](url)` links (negative lookahead on `(`). */
+export function hostTagGroups(md: string): string[][] {
+  const re = /\[([^\]]+)\](?!\()/g;
+  const out: string[][] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(md)) !== null) out.push(m[1].split(',').map((s) => s.trim()).filter(Boolean));
+  return out;
+}
+
+/** Number publications: brief-cited hosts first (appearance order), then remaining fact hosts. */
+export function buildHostCitations(brief: string | null | undefined, factHosts: string[]): Record<string, number> {
+  const known = new Set(factHosts);
+  const map: Record<string, number> = {};
+  let n = 0;
+  if (brief) for (const group of hostTagGroups(brief)) for (const tok of group) {
+    if (known.has(tok) && !(tok in map)) map[tok] = ++n;
+  }
+  for (const h of factHosts) if (!(h in map)) map[h] = ++n;
+  return map;
+}
+
+/** Rewrite `[host, host]` groups into per-host anchor links the citation renderer turns into
+ *  superscripts. Groups with no known host (and real `[text](url)` links) are left untouched. */
+export function renderHostCitations(md: string, hostNumbers: Record<string, number>): string {
+  return md.replace(/\[([^\]]+)\](?!\()/g, (full, inner: string) => {
+    const tokens = inner.split(',').map((s) => s.trim());
+    if (!tokens.some((t) => t in hostNumbers)) return full;
+    return tokens.map((t) => (t in hostNumbers ? `[${t}](#cite-${t})` : t)).join('');
+  });
+}
+
+export type SourceRow = { host: string; n: number; url: string; note?: string };
+
+/** One row per numbered host (ordered by number): representative url = the first fact url whose
+ *  host matches; note = the host's source_note if any. */
+export function buildSourceRows(
+  hostNumbers: Record<string, number>,
+  factUrls: string[],
+  notes: Record<string, string> | null | undefined,
+): SourceRow[] {
+  const repUrl: Record<string, string> = {};
+  for (const u of factUrls) { const h = hostOf(u); if (!(h in repUrl)) repUrl[h] = u; }
+  return Object.entries(hostNumbers)
+    .sort((a, b) => a[1] - b[1])
+    .map(([host, n]) => ({ host, n, url: repUrl[host] ?? '#', note: notes?.[host] }));
 }

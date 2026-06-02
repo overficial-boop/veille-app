@@ -418,6 +418,17 @@ details[open] > summary .chev { transform: rotate(90deg); }
 .brief-prose li { position: relative; margin-bottom: .55rem; padding-left: .3rem; }
 .brief-prose li::before { content: ""; position: absolute; left: -.8rem; top: .65em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 
+/* Journal — vetted novelties above the brief. */
+.journal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.1rem; }
+.journal-entry { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .9rem; align-items: baseline; padding-left: 1rem; border-left: 2px solid var(--accent); }
+.journal-date { font-family: var(--font-mono); font-size: var(--t-mono); letter-spacing: .03em; color: var(--ink-3); white-space: nowrap; }
+.journal-text { font-size: 1.02rem; line-height: 1.5; color: var(--ink); margin: 0; }
+.journal-reason { font-family: var(--font-serif); font-style: italic; font-size: var(--t-sm); color: var(--ink-2); margin: .25rem 0 0; }
+.journal-meta { margin-top: .3rem; font-family: var(--font-mono); font-size: var(--t-mono); letter-spacing: .03em; }
+.journal-meta a { color: var(--accent); text-decoration: none; }
+.journal-meta a:hover { text-decoration: underline; }
+@media (max-width: 560px) { .journal-entry { grid-template-columns: 1fr; gap: .3rem; } }
+
 /* inline citation */
 .cite { cursor: pointer; transition: background .15s, box-shadow .15s; border-radius: 2px; }
 .cite sup { display: none; }

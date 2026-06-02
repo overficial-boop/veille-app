@@ -2,10 +2,11 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/session';
-import { getDossier, listSources, listFacts } from '@/lib/dossiers';
+import { getDossier, listSources, listFacts, listJournal } from '@/lib/dossiers';
 import { listDocumentsByStatus } from '@/lib/documents';
 import { formatDateFr } from '@/components/templates/types';
 import { Brief } from '@/components/brief';
+import { JournalFeed } from '@/components/journal-feed';
 import { CitationsProvider } from '@/components/citations-context';
 import { DossierRuntime } from '@/components/dossier-runtime';
 import { KeptFeed, SuggestionsTray, GenerateBriefCta } from '@/components/curation';
@@ -34,10 +35,11 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
   if (!session) redirect('/sign-in');
   const dossier = await getDossier(session.user.id, slug);
   if (!dossier) notFound();
-  const [sources, facts, { kept, suggestions }] = await Promise.all([
+  const [sources, facts, { kept, suggestions }, journal] = await Promise.all([
     listSources(dossier.id),
     listFacts(dossier.id),
     listDocumentsByStatus(dossier.id),
+    listJournal(dossier.id),
   ]);
   const factUrls = facts.map((f) => f.sourceUrl);
   const factHosts = [...new Set(factUrls.map(hostOf))];
@@ -99,6 +101,7 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
 
           {/* BRIEF column — the synthesis (or the prompt to write one) */}
           <main className="dossier-main" style={{ minWidth: 0 }}>
+            <JournalFeed entries={journal} slug={dossier.slug} />
             {dossier.brief ? (
               <CitationsProvider>
                 <Brief brief={dossier.brief} refs={briefRefs} hostNumbers={hostNumbers} />

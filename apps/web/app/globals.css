@@ -580,12 +580,16 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 .fiche-facts.compact .fact:first-child { border-top: none; padding-top: 0; }
 .fiche-facts.compact .fact-top { align-items: baseline; gap: .55rem; }
 .fiche-facts.compact .fact-text { font-size: .9rem; line-height: 1.5; }
-.fiche-facts.compact .verbatim { margin-top: .35rem; }
-/* Per-fact "Vérifier ce fait" — a quiet inline action under a fact. */
-.fact-verify { margin-top: .3rem; padding: 0; background: none; border: none; cursor: pointer;
-  font-family: var(--font-mono); font-size: var(--t-mono); letter-spacing: .04em; color: var(--ink-3); }
-.fact-verify:hover:not(:disabled) { color: var(--accent); }
-.fact-verify:disabled { opacity: .5; cursor: default; }
+/* Per-fact action row — "Vérifier ce fait" + "passage source" as small outline buttons, one line. */
+.fact-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .45rem; }
+.fact-btn { font-family: var(--font-mono); font-size: var(--t-mono); letter-spacing: .04em; color: var(--ink-2);
+  background: none; border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: .16rem .55rem; cursor: pointer;
+  transition: color .15s var(--ease), border-color .15s var(--ease); }
+.fact-btn:hover:not(:disabled), .fact-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.fact-btn:disabled { opacity: .5; cursor: default; }
+.fact-passage { margin: .5rem 0 0; padding: .7rem .9rem; border-left: 2px solid var(--accent); background: var(--surface-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-family: var(--font-serif); font-size: var(--t-sm);
+  font-style: italic; line-height: 1.55; color: var(--ink-2); }
 
 /* ============================================================
    PRESERVED — existing animation utilities

@@ -160,9 +160,12 @@ export function confLevel(confidence?: number): 1 | 2 | 3 {
 
 interface ConfBarsProps {
   level: 1 | 2 | 3;
+  /** Show the text label ("indice élevé"). The bars carry the level; the label is redundant in
+   *  dense lists, so callers can hide it (the title tooltip still names the level). */
+  showLabel?: boolean;
 }
 
-export function ConfBars({ level }: ConfBarsProps) {
+export function ConfBars({ level, showLabel = true }: ConfBarsProps) {
   const label = CONF_LABELS[level];
   return (
     <span className="conf" title={`Confiance : ${label}`}>
@@ -171,7 +174,7 @@ export function ConfBars({ level }: ConfBarsProps) {
           <i key={i} className={i <= level ? 'on' : ''} />
         ))}
       </span>
-      <span>{label}</span>
+      {showLabel && <span>{label}</span>}
     </span>
   );
 }

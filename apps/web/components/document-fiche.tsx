@@ -88,6 +88,7 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
   const [elaborating, setElaborating] = React.useState(false);
   const [factChecking, setFactChecking] = React.useState(false);
   const [verifyingFactId, setVerifyingFactId] = React.useState<string | null>(null);
+  const [openPassage, setOpenPassage] = React.useState<string | null>(null);
   const [withTavily, setWithTavily] = React.useState(false);
   const [elaborateError, setElaborateError] = React.useState<string | null>(null);
   const [factCheckError, setFactCheckError] = React.useState<string | null>(null);
@@ -395,26 +396,34 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
                   return (
                     <div key={f.id} className="fact" style={{ paddingLeft: 0 }}>
                       <div className="fact-top">
-                        <ConfBars level={confLevel(f.confidence ?? undefined)} />
+                        <ConfBars level={confLevel(f.confidence ?? undefined)} showLabel={false} />
                         <span className="fact-text">{f.text}</span>
                       </div>
-                      {check ? (
-                        <p className="fiche-check-note">{check.note}</p>
-                      ) : (
-                        <button
-                          type="button"
-                          className="fact-verify"
-                          onClick={() => verifyOneFact(f.id)}
-                          disabled={verifyingFactId !== null || factChecking}
-                        >
-                          {verifyingFactId === f.id ? 'Vérification…' : 'Vérifier ce fait'}
-                        </button>
-                      )}
-                      {f.sourcePassage && (
-                        <details className="verbatim">
-                          <summary>passage source</summary>
-                          <blockquote>{f.sourcePassage}</blockquote>
-                        </details>
+                      {check && <p className="fiche-check-note">{check.note}</p>}
+                      <div className="fact-actions">
+                        {!check && (
+                          <button
+                            type="button"
+                            className="fact-btn"
+                            onClick={() => verifyOneFact(f.id)}
+                            disabled={verifyingFactId !== null || factChecking}
+                          >
+                            {verifyingFactId === f.id ? 'Vérification…' : 'Vérifier ce fait'}
+                          </button>
+                        )}
+                        {f.sourcePassage && (
+                          <button
+                            type="button"
+                            className="fact-btn"
+                            aria-expanded={openPassage === f.id}
+                            onClick={() => setOpenPassage((p) => (p === f.id ? null : f.id))}
+                          >
+                            passage source
+                          </button>
+                        )}
+                      </div>
+                      {f.sourcePassage && openPassage === f.id && (
+                        <blockquote className="fact-passage">{f.sourcePassage}</blockquote>
                       )}
                     </div>
                   );

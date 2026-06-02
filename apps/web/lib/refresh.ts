@@ -13,12 +13,7 @@ import type { SynthesisProgress } from './synthesis';
 import { upsertDocument, linkFacts, setDocumentCore } from './documents';
 import { analyzeDocumentCore } from './document/analyze';
 import { hostOf } from './host';
-
-// --- Relevance tuning knobs (calibrated empirically; see R3) ---
-const CANDIDATE_SCORE_FLOOR = 0.4;    // drop weaker results — only applied to scored (Tavily) candidates
-const MAX_CANDIDATES_PER_SOURCE = 6;  // cap URLs mined per standing source per refresh
-const FACT_RELEVANCE_FLOOR = 0.5;     // drop extracted facts less relevant than this to the subject
-const MAX_FACTS_PER_URL = 20;         // backstop: keep at most the top-N facts from any single page
+import { getRefreshConfig } from './refresh-config';
 
 export type RefreshProgress =
   | { type: 'source-start'; label: string }
@@ -49,9 +44,12 @@ function topFactsPerUrl(urlFacts: Fact[], n: number): Fact[] {
 
 export async function refreshDossier(
   dossierId: string,
-  opts: { force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void } = {},
+  opts: { force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void; phase?: 'assemble' | 'refresh' } = {},
 ): Promise<{ total: number; added: number }> {
   registerAllAdapters();
+  const cfg = getRefreshConfig();
+  const phase = opts.phase ?? 'refresh';
+  const candidatesPerSource = phase === 'assemble' ? cfg.assembleCandidatesPerSource : cfg.refreshCandidatesPerSource;
   const onProgress = opts.onProgress ?? (() => {});
   const lang = opts.language ?? 'fr';
 
@@ -84,9 +82,9 @@ export async function refreshDossier(
         // Unscored candidates (RSS / YouTube-channel set no score) pass the floor;
         // only scored (Tavily) candidates must clear it. The cap still bounds all.
         const ranked = [...candidates]
-          .filter((c) => c.score === undefined || c.score >= CANDIDATE_SCORE_FLOOR)
+          .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .slice(0, MAX_CANDIDATES_PER_SOURCE);
+          .slice(0, candidatesPerSource);
         // skip candidate URLs already extracted on a prior refresh (spec §5); the
         // (sourceUrl,text) dedup below is the secondary, fact-level guard.
         for (const c of freshCandidates(ranked, seenUrls)) {
@@ -96,7 +94,7 @@ export async function refreshDossier(
             let captured = '';
             const top = topFactsPerUrl(
               await extract(c.url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
-              MAX_FACTS_PER_URL,
+              cfg.maxFactsPerUrl,
             );
             // Backfill publication date from the discovery candidate (Tavily published_date /
             // RSS pubDate) when the adapter didn't find one — improves stream classification.
@@ -126,7 +124,7 @@ export async function refreshDossier(
         let captured = '';
         extracted = topFactsPerUrl(
           await extract(url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
-          MAX_FACTS_PER_URL,
+          cfg.maxFactsPerUrl,
         );
         const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(url);
         const prov0 = extracted[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
@@ -148,7 +146,7 @@ export async function refreshDossier(
         subjectHint.length > 0
           ? extracted.filter((f) => {
               const r = (f.provenance as { relevance?: number } | null)?.relevance;
-              return typeof r !== 'number' || r >= FACT_RELEVANCE_FLOOR; // keep if unscored or above floor
+              return typeof r !== 'number' || r >= cfg.factRelevanceFloor; // keep if unscored or above floor
             })
           : extracted;
       const fresh = filterNewFacts(relevantExtracted, seen);

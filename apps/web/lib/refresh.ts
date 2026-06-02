@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from './db';
-import { dossiers, sources } from './db/schema';
+import { dossiers, sources, documents } from './db/schema';
 import { extract, findAdapter } from '@veille/core';
 import { discoverTavily, discoverRss, discoverYouTubeChannel } from '@veille/discovery';
 import type { Candidate } from '@veille/discovery';
@@ -64,7 +64,10 @@ export async function refreshDossier(
     : undefined;
 
   const srcRows = await db.select().from(sources).where(eq(sources.dossierId, dossierId));
-  const seenUrls = new Set<string>();
+  // Seed seen-URLs from documents already pulled, so re-runs (refresh / re-assemble) skip them
+  // instead of re-fetching + re-scoring (each candidate costs a fetch + a relevance LLM call).
+  const existingDocs = await db.select({ url: documents.url }).from(documents).where(eq(documents.dossierId, dossierId));
+  const seenUrls = new Set(existingDocs.map((d) => d.url));
   let kept = 0;
   let suggested = 0;
 
@@ -77,7 +80,7 @@ export async function refreshDossier(
   ): Promise<'kept' | 'suggestion'> {
     let captured = '';
     await extract(url, { language: lang, contentOnly: true, onContent: (t) => { captured = t; } });
-    const intent = (dossier?.intent ?? subjectHint ?? '').toString();
+    const intent = subjectHint || dossier?.intent || ''; // prefer the richer "name — intent" hint
     const rel = captured
       ? await scoreRelevance({ title: candTitle ?? url, content: captured, intent, language: lang, contentBudget: cfg.relevanceContentBudget })
       : { score: 0, reason: 'contenu indisponible' };
@@ -135,9 +138,13 @@ export async function refreshDossier(
       } else {
         const url = (src.input as { url: string }).url;
         const title = src.label ?? undefined;
-        const status = await processCandidate(url, undefined, title);
-        if (status === 'kept') kept++; else suggested++;
-        onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: title ?? url, status, kept, total: kept + suggested });
+        try {
+          const status = await processCandidate(url, undefined, title);
+          if (status === 'kept') kept++; else suggested++;
+          onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: title ?? url, status, kept, total: kept + suggested });
+        } catch {
+          /* bad item URL: skip; lastExtractedAt is still set below, so it isn't retried forever */
+        }
       }
       await db.update(sources).set({ lastExtractedAt: new Date() }).where(eq(sources.id, src.id));
     } catch (e) {

@@ -4,7 +4,6 @@ import { dossiers, facts as factsTable, dossierUpdates } from './db/schema';
 import { selectLlmClient } from '@veille/core';
 import { hostOf } from './host';
 
-
 export type SourceGroup = { host: string; facts: Fact[] };
 
 export { hostOf } from './host';

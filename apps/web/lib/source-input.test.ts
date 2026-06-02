@@ -59,25 +59,34 @@ describe('sourceTarget', () => {
 describe('sourceSpecToRow', () => {
   it('web → item/web', () => {
     expect(sourceSpecToRow('web', '  https://lemonde.fr/x  ')).toEqual({
-      connector: 'web', kind: 'item', input: { url: 'https://lemonde.fr/x' }, label: 'https://lemonde.fr/x',
+      connector: 'web', kind: 'item', purpose: 'state', input: { url: 'https://lemonde.fr/x' }, label: 'https://lemonde.fr/x',
     });
   });
   it('search → standing/tavily', () => {
     expect(sourceSpecToRow('search', 'gabriel attal')).toEqual({
-      connector: 'tavily', kind: 'standing', input: { query: 'gabriel attal' }, label: 'gabriel attal',
+      connector: 'tavily', kind: 'standing', purpose: 'watch', input: { query: 'gabriel attal' }, label: 'gabriel attal',
     });
   });
   it('rss → standing/rss with resolved label, falling back to the value', () => {
     expect(sourceSpecToRow('rss', 'https://blog.fr/feed', { feedUrl: 'https://blog.fr/feed', label: 'Le Blog' })).toEqual({
-      connector: 'rss', kind: 'standing', input: { feedUrl: 'https://blog.fr/feed' }, label: 'Le Blog',
+      connector: 'rss', kind: 'standing', purpose: 'watch', input: { feedUrl: 'https://blog.fr/feed' }, label: 'Le Blog',
     });
     expect(sourceSpecToRow('rss', 'https://blog.fr/feed').label).toBe('https://blog.fr/feed');
   });
   it('youtube → standing/rss carrying the feed + source hint', () => {
     expect(sourceSpecToRow('youtube', '@mkbhd', { feedUrl: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCx', label: 'MKBHD' })).toEqual({
-      connector: 'rss', kind: 'standing',
+      connector: 'rss', kind: 'standing', purpose: 'watch',
       input: { feedUrl: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCx', source: 'youtube' },
       label: 'MKBHD',
     });
+  });
+});
+
+describe('sourceSpecToRow purpose', () => {
+  it('tags manual search/rss/youtube as watch, web item as state', () => {
+    expect(sourceSpecToRow('web', 'https://x.fr/a').purpose).toBe('state');
+    expect(sourceSpecToRow('search', 'requête').purpose).toBe('watch');
+    expect(sourceSpecToRow('rss', 'https://x.fr/feed', { feedUrl: 'https://x.fr/feed' }).purpose).toBe('watch');
+    expect(sourceSpecToRow('youtube', '@chan', { feedUrl: 'https://f', label: 'C' }).purpose).toBe('watch');
   });
 });

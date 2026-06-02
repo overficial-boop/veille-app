@@ -99,6 +99,7 @@ export async function setTemplate(ownerId: string, slug: string, template: strin
 type NewSource = {
   connector: string;
   kind: 'standing' | 'item';
+  purpose: 'state' | 'watch';
   input: unknown;
   label?: string | null;
 };
@@ -113,6 +114,7 @@ export async function addSource(ownerId: string, slug: string, source: NewSource
     dossierId: dossier.id,
     connector: source.connector,
     kind: source.kind,
+    purpose: source.purpose,
     input: source.input,
     label: source.label ?? null,
   } as typeof sources.$inferInsert);

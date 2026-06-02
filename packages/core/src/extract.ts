@@ -16,6 +16,8 @@ export type ExtractHints = {
   concurrency?: number;
   model?: string;
   withSummary?: boolean;
+  /** Fetch + clean the source, fire onContent, and return NO facts (skip the extraction LLM calls). */
+  contentOnly?: boolean;
 };
 
 export type ExtractInput =

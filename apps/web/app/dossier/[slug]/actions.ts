@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/session';
 import { setTemplate, addSource, removeSource, getDossier, updateSource } from '@/lib/dossiers';
+import { setDocumentStatus as setDocumentStatusDb } from '@/lib/documents';
 import { composeDossier } from '@/lib/synthesis';
 import { resolveYouTubeFeed, fetchFeedTitle, sourceSpecToRow, type AddSourceType, type SourceRow } from '@/lib/source-input';
 
@@ -72,5 +73,28 @@ export async function regenerateBriefAction(slug: string): Promise<void> {
   const dossier = await getDossier(id, slug);
   if (!dossier) return;
   await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr' });
+  revalidatePath(`/dossier/${slug}`);
+}
+
+/** Owner-scoped curation: move a document between kept / suggestion / rejected. */
+export async function setDocumentStatus(
+  slug: string,
+  docId: string,
+  status: 'kept' | 'suggestion' | 'rejected',
+): Promise<void> {
+  const id = await ownerId();
+  if (!id) return;
+  const dossier = await getDossier(id, slug);
+  if (!dossier) return;
+  await setDocumentStatusDb(dossier.id, docId, status);
+  revalidatePath(`/dossier/${slug}`);
+}
+
+export async function generateBriefAction(slug: string, scope?: string[]): Promise<void> {
+  const id = await ownerId();
+  if (!id) return;
+  const dossier = await getDossier(id, slug);
+  if (!dossier) return;
+  await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr', scope });
   revalidatePath(`/dossier/${slug}`);
 }

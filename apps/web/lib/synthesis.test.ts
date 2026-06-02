@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hostOf, groupFactsByHost, decideCompose, parseBrief, parseUpdate, renderGroups, stripUnknownLinks, buildUpdatePrompt } from './synthesis';
+import { hostOf, groupFactsByHost, parseBrief, renderGroups, stripUnknownLinks } from './synthesis';
 import type { Fact } from '@veille/core';
 
 const f = (sourceUrl: string, text: string, extractedAt = '2026-05-30T00:00:00.000Z'): Fact =>
@@ -21,16 +21,6 @@ describe('groupFactsByHost', () => {
   });
 });
 
-describe('decideCompose', () => {
-  it('none when no facts; brief when facts but no brief; update when brief + new facts', () => {
-    expect(decideCompose({ hasFacts: false, hasBrief: false, hasNewFacts: false })).toBe('none');
-    expect(decideCompose({ hasFacts: true, hasBrief: false, hasNewFacts: true })).toBe('brief');
-    expect(decideCompose({ hasFacts: true, hasBrief: true, hasNewFacts: true })).toBe('update');
-    expect(decideCompose({ hasFacts: true, hasBrief: true, hasNewFacts: false })).toBe('none');
-    expect(decideCompose({ hasFacts: true, hasBrief: false, hasNewFacts: false })).toBe('brief');
-  });
-});
-
 describe('parseBrief', () => {
   it('parses JSON brief + source notes, tolerating fences', () => {
     const r = parseBrief('```json\n{"brief":"# B","sources":[{"host":"lemonde.fr","summary":"quotidien"}]}\n```');
@@ -39,14 +29,6 @@ describe('parseBrief', () => {
   });
   it('returns empty brief on garbage', () => {
     expect(parseBrief('not json').brief).toBe('');
-  });
-});
-
-describe('parseUpdate', () => {
-  it('parses update body + new source notes', () => {
-    const r = parseUpdate('{"update":"news","newSources":[{"host":"rtl.fr","summary":"radio"}]}');
-    expect(r.body).toBe('news');
-    expect(r.sourceNotes).toEqual({ 'rtl.fr': 'radio' });
   });
 });
 
@@ -84,11 +66,3 @@ describe('stripUnknownLinks', () => {
   });
 });
 
-describe('buildUpdatePrompt', () => {
-  const g = [{ host: 'lemonde.fr', facts: [] }];
-  it('asks for clean prose with no links/citations', () => {
-    const p = buildUpdatePrompt('X', 'fr', 'b', g);
-    expect(p).toMatch(/do NOT add Markdown links/);
-    expect(p).toContain('lemonde.fr');
-  });
-});

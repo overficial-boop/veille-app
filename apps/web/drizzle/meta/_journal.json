@@ -64,6 +64,13 @@
       "when": 1780386255176,
       "tag": "0008_parched_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780393774934,
+      "tag": "0009_thankful_bastion",
+      "breakpoints": true
     }
   ]
 }

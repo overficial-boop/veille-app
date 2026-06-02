@@ -13,6 +13,7 @@ const EXAMPLES = [
 export function NewDossierForm() {
   const router = useRouter();
   const [intent, setIntent] = useState('');
+  const [autoBrief, setAutoBrief] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -26,7 +27,7 @@ export function NewDossierForm() {
       const res = await fetch('/api/dossiers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent: value }),
+        body: JSON.stringify({ intent: value, autoBrief }),
       });
       const data = (await res.json()) as { slug?: string; error?: string };
       if (!res.ok || !data.slug) {
@@ -70,6 +71,22 @@ export function NewDossierForm() {
             rows={3}
             aria-label="Votre intention"
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '0.25rem' }}>
+            <input
+              id="auto-brief-checkbox"
+              type="checkbox"
+              checked={autoBrief}
+              onChange={(e) => setAutoBrief(e.target.checked)}
+              disabled={loading}
+              style={{ accentColor: 'var(--accent)', width: 15, height: 15, cursor: 'pointer' }}
+            />
+            <label
+              htmlFor="auto-brief-checkbox"
+              style={{ fontSize: 'var(--t-sm)', color: 'var(--fg-muted)', cursor: 'pointer', userSelect: 'none' }}
+            >
+              Générer un brief automatiquement
+            </label>
+          </div>
           <div className="compose-foot">
             <span className="kbd">
               <kbd>⌘</kbd><kbd>↵</kbd> pour lancer

@@ -46,7 +46,7 @@ export default async function DocumentPage({
     <div className="shell">
       <TopBar email={session.user.email} />
       <div className="page dossier">
-        <Link href={`/dossier/${slug}?tab=documents`} className="back">
+        <Link href={`/dossier/${slug}`} className="back">
           <ArrowLeft />
           Documents
         </Link>

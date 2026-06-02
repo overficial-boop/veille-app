@@ -500,18 +500,6 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 .type-opt .ex { font-size: var(--t-xs); color: var(--ink-3); margin-top: .1rem; }
 .dialog-foot { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.3rem; }
 
-/* ---------------- TABS (dossier page) ---------------- */
-.tabs { display: flex; gap: .3rem; margin: 1.5rem 0 0; border-bottom: 1px solid var(--line); padding-bottom: 0; }
-.tab {
-  font-family: var(--font-sans); font-size: var(--t-sm); font-weight: 600;
-  color: var(--ink-3); background: transparent; border: none; cursor: pointer;
-  padding: .5rem .9rem; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color .14s, border-color .14s, background .14s;
-}
-.tab:hover { color: var(--ink); background: var(--surface-2); }
-.tab-active { color: var(--ink); border-bottom-color: var(--accent); }
-
 /* ---------------- DOCUMENT GRID ---------------- */
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
 .doc-card { display: flex; flex-direction: column; gap: .5rem; padding: 1rem 1.15rem; text-decoration: none; }
@@ -523,6 +511,41 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 .doc-foot { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: auto; font-family: var(--font-mono); font-size: var(--t-mono); color: var(--ink-3); letter-spacing: .03em; }
 .doc-badges { display: flex; gap: .3rem; flex-wrap: wrap; }
 .doc-badge { font-family: var(--font-mono); font-size: var(--t-mono); padding: .1em .45em; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-3); letter-spacing: .03em; }
+
+/* ---------------- CURATION (relevance pill · reject · suggestions tray) ---------------- */
+/* Relevance indicator — a compact percentage pill tinted by tier. Sits in the card's top row. */
+.rel-pill { flex: none; font-family: var(--font-mono); font-size: var(--t-mono); font-weight: 600; padding: .1em .4em; border-radius: 999px; letter-spacing: .02em; border: 1px solid transparent; }
+.rel-hi  { color: var(--accent);  background: var(--accent-soft); border-color: color-mix(in oklch, var(--accent) 30%, var(--line-2)); }
+.rel-mid { color: var(--ink-2);   background: var(--surface-2);   border-color: var(--line-2); }
+.rel-lo  { color: var(--ink-3);   background: var(--surface-2);   border-color: var(--line-2); }
+/* Push the pill + reject control to the right edge of the card's top row. */
+.doc-card-top .rel-pill { margin-left: auto; }
+.doc-card-top .rel-pill ~ .doc-reject { margin-left: .15rem; }
+.doc-card-top .doc-reject { margin-left: auto; }
+
+/* Per-card "Écarter" — a quiet ghost square; stops the card link on click (handled in JS). */
+.doc-reject { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--ink-3); cursor: pointer; transition: background .14s, color .14s; }
+.doc-reject:hover { background: color-mix(in oklch, var(--danger) 12%, transparent); color: var(--danger); }
+.doc-reject svg { width: 14px; height: 14px; }
+.doc-reject:disabled { opacity: .5; cursor: default; }
+
+/* Brief CTA — empty-brief prompt; the button sits under the placeholder line. */
+.brief-cta .btn { margin-top: .25rem; }
+
+/* Suggestions tray — collapsed candidates to triage. A bordered .section <details>. */
+.suggest-tray { margin-top: 2rem; }
+.suggest-tray > .suggest-head { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: .7rem; user-select: none; }
+.suggest-tray > .suggest-head::-webkit-details-marker { display: none; }
+.suggest-count { font-family: var(--font-serif); font-size: 1.15rem; font-weight: 500; color: var(--ink); }
+.suggest-tray[open] > .suggest-head .suggest-count { color: var(--accent); }
+.suggest-list { display: flex; flex-direction: column; margin-top: 1rem; border-top: 1px solid var(--line); }
+.suggest-row { display: flex; align-items: center; gap: 1rem; padding: .7rem 0; border-bottom: 1px solid var(--line); }
+.suggest-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .2rem; text-decoration: none; }
+.suggest-title { font-family: var(--font-serif); font-size: var(--t-sm); color: var(--ink); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.suggest-main:hover .suggest-title { color: var(--accent); }
+.suggest-meta { display: flex; align-items: center; gap: .5rem; }
+.suggest-meta .rel-pill { margin-left: 0; }
+.suggest-acts { flex: none; display: flex; gap: .4rem; }
 
 /* ---------------- DOCUMENT FICHE ---------------- */
 .fiche-lead { font-family: var(--font-serif); font-size: 1.12rem; font-style: italic; color: var(--ink-2); line-height: 1.55; max-width: var(--read-w); }

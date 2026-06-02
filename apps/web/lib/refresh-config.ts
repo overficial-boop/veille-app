@@ -5,24 +5,23 @@ export type RefreshConfig = {
   assembleCandidatesPerSource: number;
   refreshCandidatesPerSource: number;
   candidateScoreFloor: number;
-  factRelevanceFloor: number;
-  maxFactsPerUrl: number;
+  relevanceKeepFloor: number;
+  relevanceContentBudget: number;
 };
 
-// The floors + cap (candidateScoreFloor 0.4, factRelevanceFloor 0.5, maxFactsPerUrl 20)
-// were empirically calibrated against live dossiers (the "relevance pass"); don't change
-// them blindly. The candidate counts set first-run depth (10) vs ongoing refresh depth (6).
+// candidateScoreFloor 0.4 was empirically calibrated against live dossiers (the "relevance pass");
+// don't change it blindly. The candidate counts set first-run depth (10) vs ongoing refresh depth (6).
 const DEFAULTS: RefreshConfig = {
   plannerMaxQueries: 5,
   assembleCandidatesPerSource: 10,
   refreshCandidatesPerSource: 6,
   candidateScoreFloor: 0.4,
-  factRelevanceFloor: 0.5,
-  maxFactsPerUrl: 20,
+  relevanceKeepFloor: 0.5,
+  relevanceContentBudget: 6000,
 };
 
 /** Positive finite number from an env string, else the default. Fractional values pass
- *  through unchanged: the floors (candidateScoreFloor/factRelevanceFloor) are meant to be
+ *  through unchanged: the floors (candidateScoreFloor/relevanceKeepFloor) are meant to be
  *  fractional, and the count knobs are only ever used as slice/loop bounds, which JS
  *  truncates safely — so no rounding is applied here. */
 function num(v: string | undefined, d: number): number {
@@ -36,8 +35,8 @@ export function resolveRefreshConfig(env: Record<string, string | undefined>): R
     assembleCandidatesPerSource: num(env.VEILLE_ASSEMBLE_CANDIDATES, DEFAULTS.assembleCandidatesPerSource),
     refreshCandidatesPerSource: num(env.VEILLE_REFRESH_CANDIDATES, DEFAULTS.refreshCandidatesPerSource),
     candidateScoreFloor: num(env.VEILLE_CANDIDATE_SCORE_FLOOR, DEFAULTS.candidateScoreFloor),
-    factRelevanceFloor: num(env.VEILLE_FACT_RELEVANCE_FLOOR, DEFAULTS.factRelevanceFloor),
-    maxFactsPerUrl: num(env.VEILLE_MAX_FACTS_PER_URL, DEFAULTS.maxFactsPerUrl),
+    relevanceKeepFloor: num(env.VEILLE_RELEVANCE_KEEP_FLOOR, DEFAULTS.relevanceKeepFloor),
+    relevanceContentBudget: num(env.VEILLE_RELEVANCE_CONTENT_BUDGET, DEFAULTS.relevanceContentBudget),
   };
 }
 

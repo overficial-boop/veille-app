@@ -3,7 +3,7 @@ import type { facts } from './db/schema';
 
 type FactRow = typeof facts.$inferInsert;
 
-export function factToRow(fact: Fact, dossierId: string, sourceId: string): FactRow {
+export function factToRow(fact: Fact, dossierId: string, sourceId: string | null): FactRow {
   return {
     id: fact.id,
     dossierId,

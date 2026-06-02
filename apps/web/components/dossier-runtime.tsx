@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Rss,
   Search,
+  Sparkles,
   X,
   Youtube,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import {
   addSourceAction,
   removeSourceAction,
   regenerateBriefAction,
+  generateBriefAction,
   updateSourceAction,
 } from '@/app/dossier/[slug]/actions';
 import { formatDateFr } from '@/components/templates/types';
@@ -85,7 +87,7 @@ function addTypeIcon(type: AddSourceType): ComponentType<{ className?: string }>
  */
 type Progress =
   | { type: 'source-start'; label: string }
-  | { type: 'facts'; sourceLabel: string; added: number; total: number }
+  | { type: 'document'; sourceLabel: string; title: string; status: 'kept' | 'suggestion'; kept: number; total: number }
   | { type: 'source-error'; label: string; message: string }
   | { type: 'done'; total: number }
   | SynthesisProgress;
@@ -103,16 +105,20 @@ type SourceLite = {
 type Props = {
   slug: string;
   status: string;
+  /** Whether a brief already exists — decides "Réécrire" (regenerate) vs "Générer le brief" (first). */
+  hasBrief: boolean;
   sources: SourceLite[];
 };
 
 type Phase = 'idle' | 'running' | 'done' | 'error';
 
-/** A row in the live progress panel, keyed by source label as it resolves. */
+/** A row in the live progress panel, keyed by source label as it resolves. Tracks how many
+ *  documents that source has yielded so far and how many were kept (vs parked as suggestions). */
 type ProgressLine = {
   label: string;
-  state: 'pending' | 'added' | 'error';
-  added?: number;
+  state: 'pending' | 'scanned' | 'error';
+  docs?: number;
+  kept?: number;
 };
 
 /** The synthesis (brief/update) step — a single live line, distinct from the source rows. */
@@ -120,14 +126,16 @@ type SynthLine =
   | { state: 'running'; phase: 'brief' | 'update' }
   | { state: 'error'; message: string };
 
-export function DossierRuntime({ slug, status, sources }: Props) {
+export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
 
   const [phase, setPhase] = React.useState<Phase>('idle');
   const [lines, setLines] = React.useState<ProgressLine[]>([]);
   const [synth, setSynth] = React.useState<SynthLine | null>(null);
-  const [total, setTotal] = React.useState(0);
+  // The running tally across the whole run: total documents seen and how many were kept.
+  const [docTotal, setDocTotal] = React.useState(0);
+  const [keptTotal, setKeptTotal] = React.useState(0);
 
   const esRef = React.useRef<EventSource | null>(null);
   const doneRef = React.useRef(false);
@@ -150,7 +158,8 @@ export function DossierRuntime({ slug, status, sources }: Props) {
       setPhase('running');
       setLines([]);
       setSynth(null);
-      setTotal(0);
+      setDocTotal(0);
+      setKeptTotal(0);
 
       const es = new EventSource(path);
       esRef.current = es;
@@ -169,18 +178,31 @@ export function DossierRuntime({ slug, status, sources }: Props) {
               ? prev
               : [...prev, { label, state: 'pending' }],
           );
-        } else if (p.type === 'facts') {
-          setTotal(p.total);
+        } else if (p.type === 'document') {
+          // The engine emits one `document` frame per analysed candidate, carrying a running
+          // global tally (kept / total) for the whole run. Drive the global counters from those,
+          // and bump the originating source's row in place (one row per source, climbing counts)
+          // rather than appending — otherwise each document would spawn a duplicate line.
+          setDocTotal(p.total);
+          setKeptTotal(p.kept);
+          const sourceLabel = p.sourceLabel;
+          const wasKept = p.status === 'kept';
           setLines((prev) => {
-            // Match by label regardless of state: the engine emits `facts` repeatedly per source
-            // (once per candidate, climbing `added`), so update the existing row in place rather
-            // than appending — otherwise each update would spawn a duplicate line.
-            const idx = prev.findIndex((l) => l.label === p.sourceLabel);
+            const idx = prev.findIndex((l) => l.label === sourceLabel);
             if (idx === -1) {
-              return [...prev, { label: p.sourceLabel, state: 'added', added: p.added }];
+              return [
+                ...prev,
+                { label: sourceLabel, state: 'scanned', docs: 1, kept: wasKept ? 1 : 0 },
+              ];
             }
             const next = [...prev];
-            next[idx] = { label: p.sourceLabel, state: 'added', added: p.added };
+            const cur = next[idx];
+            next[idx] = {
+              label: sourceLabel,
+              state: 'scanned',
+              docs: (cur.docs ?? 0) + 1,
+              kept: (cur.kept ?? 0) + (wasKept ? 1 : 0),
+            };
             return next;
           });
         } else if (p.type === 'source-error') {
@@ -200,7 +222,7 @@ export function DossierRuntime({ slug, status, sources }: Props) {
           // terminal transition (and router.refresh) happens when the server
           // closes the stream (onerror, below).
           doneRef.current = true;
-          setTotal(p.total);
+          setDocTotal(p.total);
         } else if (p.type === 'synthesis') {
           if (p.state === 'start') {
             setSynth({ state: 'running', phase: p.phase });
@@ -265,6 +287,16 @@ export function DossierRuntime({ slug, status, sources }: Props) {
     });
   }
 
+  // First-time brief: shown only when none exists yet. Same action the inline CTA uses;
+  // revalidates the dossier path so the brief renders when the transition resolves.
+  function makeBrief() {
+    if (isPending || running) return;
+    setSynth(null);
+    startTransition(() => {
+      generateBriefAction(slug);
+    });
+  }
+
   return (
     <>
       <div className="card runtime">
@@ -282,31 +314,41 @@ export function DossierRuntime({ slug, status, sources }: Props) {
           >
             {running ? 'Rafraîchissement…' : 'Rafraîchir'}
           </Btn>
-          <Btn
-            variant="ghost"
-            size="sm"
-            icon={PenLine}
-            onClick={rewriteBrief}
-            disabled={isPending || running}
-          >
-            {isPending ? 'Réécriture…' : 'Réécrire'}
-          </Btn>
+          {hasBrief ? (
+            <Btn
+              variant="ghost"
+              size="sm"
+              icon={PenLine}
+              onClick={rewriteBrief}
+              disabled={isPending || running}
+            >
+              {isPending ? 'Réécriture…' : 'Réécrire'}
+            </Btn>
+          ) : (
+            <Btn
+              variant="ghost"
+              size="sm"
+              icon={Sparkles}
+              onClick={makeBrief}
+              disabled={isPending || running}
+            >
+              {isPending ? 'Rédaction…' : 'Générer le brief'}
+            </Btn>
+          )}
         </div>
 
         {showPanel ? (
           <div className="progress">
             <div className="progress-global">
               {running ? <span className="spin" /> : null}{' '}
-              {phase === 'done' ? (
-                <>
-                  À jour — <span className="count">{total}</span> {total === 1 ? 'fait' : 'faits'}
-                </>
-              ) : phase === 'error' ? (
+              {phase === 'error' ? (
                 'Une erreur est survenue'
               ) : (
                 <>
-                  Assemblage en cours — <span className="count">{total}</span>{' '}
-                  {total === 1 ? 'fait' : 'faits'}
+                  {phase === 'done' ? 'À jour — ' : 'Assemblage en cours — '}
+                  <span className="count">{docTotal}</span>{' '}
+                  {docTotal === 1 ? 'document' : 'documents'}
+                  {docTotal > 0 ? <> ({keptTotal} {keptTotal === 1 ? 'gardé' : 'gardés'})</> : null}
                 </>
               )}
             </div>
@@ -350,13 +392,15 @@ export function DossierRuntime({ slug, status, sources }: Props) {
 
 /** One source row in the live progress panel. Maps the line state to the design's .psource classes. */
 function ProgressRow({ line }: { line: ProgressLine }) {
-  // pending → run; added with new facts → done; added with none → empty-r ("à jour"); error → fail.
+  // pending → run; scanned with ≥1 kept → done; scanned with none kept → empty-r; error → fail.
+  const docs = line.docs ?? 0;
+  const kept = line.kept ?? 0;
   const cls =
     line.state === 'pending'
       ? 'run'
       : line.state === 'error'
         ? 'fail'
-        : (line.added ?? 0) > 0
+        : kept > 0
           ? 'done'
           : 'empty-r';
 
@@ -365,9 +409,11 @@ function ProgressRow({ line }: { line: ProgressLine }) {
       ? 'lecture…'
       : line.state === 'error'
         ? 'indisponible'
-        : (line.added ?? 0) > 0
-          ? `${line.added} ${line.added === 1 ? 'nouveau' : 'nouveaux'}`
-          : 'à jour';
+        : docs === 0
+          ? 'rien'
+          : kept > 0
+            ? `${kept} ${kept === 1 ? 'gardé' : 'gardés'}`
+            : `${docs} à trier`;
 
   return (
     <div className={'psource ' + cls}>
@@ -647,7 +693,7 @@ function AddSourceDialog({
       <div className="dialog" role="dialog" aria-modal="true" aria-label="Ajouter une source">
         <h3>Ajouter une source</h3>
         <div className="d-sub">
-          Lancez un rafraîchissement pour extraire les faits de la nouvelle source.
+          Lancez un rafraîchissement pour analyser la nouvelle source.
         </div>
         <form onSubmit={onSubmit}>
           <div className="type-grid" role="group" aria-label="Type de source">

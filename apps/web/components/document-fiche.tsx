@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { Eyebrow, Btn, ConfBars, confLevel } from './veille-ui';
 import { Prose } from './prose';
 import type {
@@ -70,6 +71,8 @@ function CostLine({ cost }: { cost: TokenCost }) {
 /* ------------------------------------------------------------------ */
 
 export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: DocumentFicheProps) {
+  const router = useRouter();
+
   // Review/bullets/summary are generated on demand (the assemble no longer does it inline), so they
   // live in state: seeded from the server, then filled in when generation completes.
   const [shortSummary, setShortSummary] = React.useState<string | null>(doc.shortSummary);
@@ -77,6 +80,9 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
   const [bullets, setBullets] = React.useState<BulletsBlock | null>(doc.bullets);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [analyzeError, setAnalyzeError] = React.useState<string | null>(null);
+
+  // Facts extraction state
+  const [extractingFacts, setExtractingFacts] = React.useState(false);
 
   const [elaboration, setElaboration] = React.useState<ElaborationBlock | null>(doc.elaboration);
   const [factChecks, setFactChecks] = React.useState<FactChecksBlock | null>(doc.factChecks);
@@ -116,6 +122,21 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
       void handleAnalyze();
     }
   }, [review, canAnalyze, handleAnalyze]);
+
+  // Auto-extract facts the first time a document is opened with no facts (and only if content is
+  // stored). The ref guards against React strict-mode's double-invoke firing two requests.
+  const factsTriggered = React.useRef(false);
+  React.useEffect(() => {
+    if (facts.length === 0 && canAnalyze && !factsTriggered.current) {
+      factsTriggered.current = true;
+      setExtractingFacts(true);
+      fetch(`/api/dossiers/${slug}/documents/${doc.id}/facts`, { method: 'POST' })
+        .then(() => router.refresh())
+        .catch(() => {/* silent — facts are non-blocking */})
+        .finally(() => setExtractingFacts(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — run once on mount
 
   async function handleElaborate() {
     setElaborating(true);
@@ -301,7 +322,14 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
         <div className="section-head">
           <div className="ttl">
             <Eyebrow>Preuve</Eyebrow>
-            <h2 style={{ marginTop: '.1rem' }}>Faits sourcés</h2>
+            <h2 style={{ marginTop: '.1rem' }}>
+              Faits sourcés
+              {extractingFacts && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--t-mono)', color: 'var(--ink-3)', marginLeft: '.75rem', fontWeight: 400 }}>
+                  Extraction des faits…
+                </span>
+              )}
+            </h2>
           </div>
           {facts.length > 0 && !factChecks && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.4rem' }}>

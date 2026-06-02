@@ -59,6 +59,7 @@ export async function createDossier(ownerId: string, intent: string, plan: Dossi
       dossierId: id,
       connector: s.connector,
       kind: s.kind,
+      purpose: s.purpose,
       input: s.input,
       label: s.label,
     })) as (typeof sources.$inferInsert)[],

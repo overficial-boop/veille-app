@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDate, factPublishedAt, classify, backfillPublishedAt, countPendingRebuild } from './temporal';
+import { parseDate, factPublishedAt, classify, backfillPublishedAt, countPendingRebuild, isRecentCandidate } from './temporal';
 
 describe('parseDate', () => {
   it('parses ISO dates', () => {
@@ -80,5 +80,22 @@ describe('countPendingRebuild', () => {
     const dismissed = new Date('2026-05-31T00:00:00Z');
     const facts = [mk('2026-05-30', '2025-08-15'), mk('2026-06-01', '2025-08-16')];
     expect(countPendingRebuild(facts, brief, dismissed)).toBe(1);
+  });
+});
+
+describe('isRecentCandidate', () => {
+  const last = new Date('2026-05-29T00:00:00Z');
+  it('undated → recent (benefit of the doubt)', () => {
+    expect(isRecentCandidate(undefined, last)).toBe(true);
+  });
+  it('published after last refresh → recent', () => {
+    expect(isRecentCandidate('2026-05-30', last)).toBe(true);
+  });
+  it('published on/before last refresh → not recent', () => {
+    expect(isRecentCandidate('2025-08-15', last)).toBe(false);
+    expect(isRecentCandidate('2026-05-29T00:00:00Z', last)).toBe(false);
+  });
+  it('null lastRefresh → recent', () => {
+    expect(isRecentCandidate('2020-01-01', null)).toBe(true);
   });
 });

@@ -43,6 +43,14 @@ export function backfillPublishedAt<T extends { provenance: unknown }>(
   return { ...fact, provenance: { ...prov, publishedAt: d.toISOString() } };
 }
 
+/** A refresh candidate is "recent" if it has no usable date (unseen + recency-biased
+ *  search ⇒ likely new) or it was published after the last refresh. */
+export function isRecentCandidate(publishedAt: string | undefined, lastRefresh: Date | null): boolean {
+  if (!lastRefresh) return true;
+  const d = parseDate(publishedAt);
+  return d === null || d > lastRefresh;
+}
+
 /** Count facts that should prompt a brief rebuild: published before the brief was built
  *  (classify → 'complement', incl. unknown dates) AND found since the brief / since the
  *  last snooze. Returns 0 when no brief exists yet. Pure (testable). */

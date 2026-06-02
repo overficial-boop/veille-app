@@ -41,8 +41,11 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
   ]);
   const factUrls = facts.map((f) => f.sourceUrl);
   const factHosts = [...new Set(factUrls.map(hostOf))];
-  const hostNumbers = dossier.brief ? buildHostCitations(dossier.brief, factHosts) : {};
-  const sourceRows = dossier.brief ? buildSourceRows(hostNumbers, factUrls, dossier.sourceNotes ?? {}) : [];
+  // Preferred: per-article numbered refs persisted at brief generation. Legacy briefs (no refs)
+  // fall back to host-based citations so they still render until regenerated.
+  const briefRefs = dossier.briefRefs ?? [];
+  const hostNumbers = dossier.brief && briefRefs.length === 0 ? buildHostCitations(dossier.brief, factHosts) : {};
+  const sourceRows = dossier.brief && briefRefs.length === 0 ? buildSourceRows(hostNumbers, factUrls, dossier.sourceNotes ?? {}) : [];
   return (
     <div className="shell">
       <TopBar email={session.user.email} />
@@ -99,8 +102,8 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
             {/* Brief — the synthesis (or the prompt to write one), at the top */}
             {dossier.brief ? (
               <CitationsProvider>
-                <Brief brief={dossier.brief} hostNumbers={hostNumbers} />
-                <Sources rows={sourceRows} />
+                <Brief brief={dossier.brief} refs={briefRefs} hostNumbers={hostNumbers} />
+                <Sources refs={briefRefs} rows={sourceRows} slug={dossier.slug} />
               </CitationsProvider>
             ) : (
               <GenerateBriefCta slug={dossier.slug} />

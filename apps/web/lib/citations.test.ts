@@ -4,6 +4,7 @@ import {
   hostTagGroups,
   buildHostCitations,
   renderHostCitations,
+  renderNumberedCitations,
   buildSourceRows,
 } from './citations';
 
@@ -108,5 +109,23 @@ describe('buildSourceRows', () => {
       { host: 'a.fr', n: 1, url: 'https://a.fr/1', note: 'note A' },
       { host: 'b.fr', n: 2, url: 'https://b.fr/x', note: undefined },
     ]);
+  });
+});
+
+describe('renderNumberedCitations', () => {
+  const refs = [
+    { n: 1, url: 'https://a.fr/1' },
+    { n: 2, url: 'https://b.fr/2' },
+  ];
+  it('rewrites [n] and [n, m] into per-article links', () => {
+    expect(renderNumberedCitations('hi [1] and [1, 2] x', refs))
+      .toBe('hi [1](https://a.fr/1) and [1](https://a.fr/1)[2](https://b.fr/2) x');
+  });
+  it('leaves out-of-range numbers and prose brackets untouched', () => {
+    expect(renderNumberedCitations('see [9] and [note] end', refs)).toBe('see [9] and [note] end');
+  });
+  it('does not touch real [text](url) links or host tags', () => {
+    expect(renderNumberedCitations('[Le Monde](https://lemonde.fr) [lefigaro.fr]', refs))
+      .toBe('[Le Monde](https://lemonde.fr) [lefigaro.fr]');
   });
 });

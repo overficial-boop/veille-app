@@ -20,6 +20,8 @@ export const dossiers = pgTable('dossiers', {
   briefSuggestionDismissedAt: timestamp('brief_suggestion_dismissed_at', { withTimezone: true }),
   autoBrief: boolean('auto_brief').notNull().default(false),
   sourceNotes: jsonb('source_notes').$type<Record<string, string>>(),
+  // Numbered article references the brief cites with [n] tags (provenance: maps n → the exact article).
+  briefRefs: jsonb('brief_refs').$type<{ n: number; url: string; docId: string | null; title: string; host: string }[]>(),
 }, (t) => [uniqueIndex('dossiers_owner_slug_idx').on(t.ownerId, t.slug)]);
 
 export const sources = pgTable('sources', {

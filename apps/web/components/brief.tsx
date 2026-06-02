@@ -4,21 +4,30 @@ import * as React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Eyebrow } from './veille-ui';
 import { citeComponents, prepareCiteMd } from './cited-markdown';
-import { renderHostCitations } from '@/lib/citations';
+import { renderNumberedCitations, renderHostCitations, type BriefRef } from '@/lib/citations';
 import { useCitations, SourcesToggle } from './citations-context';
 
 /**
  * The dossier brief — the synthesis, rendered as a `.section` with a drop-cap.
- * Citations are publication tags ([lefigaro.fr]) the model emits; we rewrite them into the
- * shared numbered-superscript pipeline. Numbers come from `hostNumbers` (one per publication),
- * shared with the Sources list so each superscript jumps to its entry. Hidden until the toggle.
+ *
+ * Preferred: the model cites SPECIFIC articles by number ([1], [2, 5]); `refs` maps each number to
+ * its article URL, and `renderNumberedCitations` turns them into the numbered-superscript pipeline,
+ * each superscript linking to that exact article. Legacy briefs (no refs, host `[lefigaro.fr]` tags)
+ * fall back to the host renderer so they still read cleanly until regenerated. Hidden until the toggle.
  */
-export function Brief({ brief, hostNumbers }: { brief: string; hostNumbers: Record<string, number> }) {
+export function Brief({ brief, refs, hostNumbers }: { brief: string; refs: BriefRef[]; hostNumbers: Record<string, number> }) {
   const { show } = useCitations();
-  const md = React.useMemo(() => prepareCiteMd(renderHostCitations(brief, hostNumbers)), [brief, hostNumbers]);
+  const numbered = refs.length > 0;
+  const md = React.useMemo(
+    () => prepareCiteMd(numbered ? renderNumberedCitations(brief, refs) : renderHostCitations(brief, hostNumbers)),
+    [brief, refs, hostNumbers, numbered],
+  );
   const citations = React.useMemo(
-    () => Object.fromEntries(Object.entries(hostNumbers).map(([h, n]) => [`#cite-${h}`, n])),
-    [hostNumbers],
+    () =>
+      numbered
+        ? Object.fromEntries(refs.map((r) => [r.url, r.n]))
+        : Object.fromEntries(Object.entries(hostNumbers).map(([h, n]) => [`#cite-${h}`, n])),
+    [refs, hostNumbers, numbered],
   );
   const components = React.useMemo(() => citeComponents(citations), [citations]);
 

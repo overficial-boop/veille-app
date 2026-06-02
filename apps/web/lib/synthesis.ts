@@ -3,6 +3,8 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { dossiers, facts as factsTable, documents as documentsTable } from './db/schema';
 import { selectLlmClient } from '@veille/core';
 import { hostOf } from './host';
+import type { BriefRef } from './citations';
+export type { BriefRef };
 
 export type SourceGroup = { host: string; facts: Fact[] };
 
@@ -46,6 +48,42 @@ export function renderGroups(groups: SourceGroup[]): string {
   ).join('\n\n');
 }
 
+// --- Article-level citations -------------------------------------------------
+// The brief cites SPECIFIC articles by number ([1], [2, 5]) rather than whole publications.
+// A numbered reference list (BriefRef[]) is built server-side, embedded in the prompt, and
+// persisted, so each superscript maps to the exact source article (provenance).
+
+export type ArticleGroup = { url: string; facts: Fact[] };
+
+/** Group facts by source article (URL), preserving first-appearance order. */
+export function groupFactsByArticle(facts: Fact[]): ArticleGroup[] {
+  const map = new Map<string, Fact[]>();
+  for (const f of facts) {
+    const arr = map.get(f.sourceUrl); if (arr) arr.push(f); else map.set(f.sourceUrl, [f]);
+  }
+  return [...map.entries()].map(([url, facts]) => ({ url, facts }));
+}
+
+/** Number the article groups (1..N), attaching the document's id/title when known. */
+export function buildBriefRefs(
+  groups: ArticleGroup[],
+  meta: Map<string, { docId: string | null; title: string | null }>,
+): BriefRef[] {
+  return groups.map((g, i) => {
+    const m = meta.get(g.url);
+    const host = hostOf(g.url);
+    return { n: i + 1, url: g.url, docId: m?.docId ?? null, title: (m?.title ?? '').trim() || host, host };
+  });
+}
+
+/** Serialize numbered article groups for the prompt: `## [n] <title> — <host>` + bare facts. */
+export function renderArticleGroups(groups: ArticleGroup[], refs: BriefRef[]): string {
+  return groups.map((g, i) => {
+    const r = refs[i]!;
+    return `## [${r.n}] ${r.title} — ${r.host}\n` + g.facts.map((f) => `- ${f.text}`).join('\n');
+  }).join('\n\n');
+}
+
 /** Anti-hallucination guard: unlink any Markdown link whose URL isn't a known source URL
  *  (keep the link text as plain prose). Ignores a trailing "/" and a "#fragment" when comparing,
  *  but preserves query strings so different YouTube watch?v= videos stay distinct. */
@@ -71,18 +109,18 @@ const BRIEF_SCHEMA = {
 
 export { BRIEF_SCHEMA };
 
-export function buildBriefPrompt(subject: string, language: string, groups: SourceGroup[]): string {
+export function buildBriefPrompt(subject: string, language: string, groups: ArticleGroup[], refs: BriefRef[]): string {
   return [
-    'You write a concise intelligence dossier brief.',
+    'You write an intelligence dossier brief — clear, well-structured editorial prose.',
     `Subject: ${subject}`,
-    `Write in: ${language}. Output Markdown prose in the "brief" field.`,
-    'Write a tight "current situation" brief: what is the state of things, the significant facts, who/what/when.',
-    'Cite each claim with its source publication tag(s) in square brackets, using the EXACT "## " publication headers listed under FACTS BY PUBLICATION below — e.g. "selon Le Figaro [lefigaro.fr]" or, when several back a point, "[lefigaro.fr, apnews.com]". Use ONLY those exact tags; never invent a tag or write a URL. Group related points; do not just list facts.',
-    'Also return, for each publication host below, a one-sentence "summary" of what that source is / its angle.',
-    'Be factual and concise. No preamble. Return JSON only: { brief, sources: [{host, summary}] }.',
+    `Write in: ${language}. Output GitHub-flavored Markdown in the "brief" field.`,
+    'STRUCTURE: open with a lead paragraph stating the current situation, then write 2 to 5 short thematic paragraphs (each a distinct angle — what happened, the reactions, the context, what comes next). Separate EVERY paragraph with a blank line. Write flowing prose in full sentences; do NOT use bullet lists or headings.',
+    'CITATIONS: cite each claim with the bracketed NUMBER(S) of the source article(s) shown in the "## [n]" headers under FACTS BY ARTICLE — e.g. "selon Le Figaro [2]" or, when several articles back a point, "[2, 5]". Use ONLY those exact numbers; never invent a number, write a URL, or put a publication name in brackets.',
+    'Also return, for each article below, a one-sentence "summary" of what that publication is / its angle, keyed by its host.',
+    'Be factual and concrete. No preamble, no title. Return JSON only: { brief, sources: [{host, summary}] }.',
     '',
-    'FACTS BY PUBLICATION:',
-    renderGroups(groups),
+    'FACTS BY ARTICLE:',
+    renderArticleGroups(groups, refs),
   ].join('\n');
 }
 
@@ -174,12 +212,14 @@ export async function composeDossier(
     const subject = [dossier.name, dossier.intent].filter(Boolean).join(' — ');
 
     onProgress({ type: 'synthesis', phase: 'brief', state: 'start' });
-    const groups = groupFactsByHost(scopedRows.map(toFact));
-    const res = await client.complete(buildBriefPrompt(subject, language, groups), { jsonSchema: BRIEF_SCHEMA });
+    const articleGroups = groupFactsByArticle(scopedRows.map(toFact));
+    const metaMap = new Map(targetDocs.map((d) => [d.url, { docId: d.id, title: d.title }]));
+    const refs = buildBriefRefs(articleGroups, metaMap);
+    const res = await client.complete(buildBriefPrompt(subject, language, articleGroups, refs), { jsonSchema: BRIEF_SCHEMA });
     const { brief, sourceNotes } = parseBrief(res.text);
     const allowedUrls = new Set(scopedRows.map((r) => r.sourceUrl));
     const safeBrief = brief ? stripUnknownLinks(brief, allowedUrls) : brief;
-    if (safeBrief) await setBrief(dossierId, safeBrief, sourceNotes);
+    if (safeBrief) await setBrief(dossierId, safeBrief, sourceNotes, refs);
     onProgress({ type: 'synthesis', phase: 'brief', state: 'done' });
     return { wrote: 'brief' };
   }

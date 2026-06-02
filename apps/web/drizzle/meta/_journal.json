@@ -78,6 +78,13 @@
       "when": 1780403082369,
       "tag": "0010_illegal_ares",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780414567991,
+      "tag": "0011_silky_logan",
+      "breakpoints": true
     }
   ]
 }

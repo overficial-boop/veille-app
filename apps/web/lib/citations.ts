@@ -58,6 +58,27 @@ export function renderHostCitations(md: string, hostNumbers: Record<string, numb
   });
 }
 
+// --- Article-level (numbered) citations --------------------------------------
+// Preferred model: the brief cites SPECIFIC articles by number ([1], [2, 5]). The numbered
+// reference list is built + persisted at generation time (dossiers.brief_refs).
+
+export type BriefRef = { n: number; url: string; docId: string | null; title: string; host: string };
+
+/** Rewrite numeric citation groups `[n]` / `[n, m]` into per-article links the renderer turns
+ *  into superscripts. Only numbers present in `refs` are linked; any other bracketed text
+ *  (prose `[note]`, host tags, real `[text](url)` links) is left untouched. */
+export function renderNumberedCitations(md: string, refs: { n: number; url: string }[]): string {
+  const byN = new Map(refs.map((r) => [r.n, r.url]));
+  return md.replace(/\[([\d,\s]+)\](?!\()/g, (full, inner: string) => {
+    const toks = inner.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!toks.some((t) => /^\d+$/.test(t) && byN.has(Number(t)))) return full;
+    return toks.map((t) => {
+      const url = /^\d+$/.test(t) ? byN.get(Number(t)) : undefined;
+      return url ? `[${t}](${url})` : t;
+    }).join('');
+  });
+}
+
 export type SourceRow = { host: string; n: number; url: string; note?: string };
 
 /** One row per numbered host (ordered by number): representative url = the first fact url whose

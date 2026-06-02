@@ -1,8 +1,9 @@
-import { uuidv7 } from '@veille/core';
+import { uuidv7, extractInput } from '@veille/core';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from './db';
 import { documents, facts } from './db/schema';
 import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, DocKind } from './document/types';
+import { registerAllAdapters } from './adapters';
 
 export async function upsertDocument(
   dossierId: string,
@@ -100,4 +101,25 @@ export async function getDocument(dossierId: string, id: string) {
 
 export async function listFactsForDocument(documentId: string) {
   return db.select().from(facts).where(eq(facts.documentId, documentId));
+}
+
+/** Idempotently extract facts from a document's STORED content (no re-fetch), attribute them to
+ *  the document's URL, insert + link them. Returns the fact count. */
+export async function extractFactsForDocument(
+  dossier: { id: string; name: string; intent: string; language: string | null },
+  doc: { id: string; url: string; title: string | null; content: string | null },
+): Promise<number> {
+  const existing = await listFactsForDocument(doc.id);
+  if (existing.length > 0) return existing.length;
+  if (!doc.content) return 0;
+  registerAllAdapters();
+  const raw = await extractInput(
+    { kind: 'text', content: doc.content, label: doc.title ?? doc.url },
+    { language: dossier.language ?? 'fr', subjectHint: [dossier.name, dossier.intent].filter(Boolean).join(' — ') },
+  );
+  const docFacts = raw.map((f) => ({ ...f, sourceUrl: doc.url })); // text adapter doesn't know the URL
+  const { insertFacts } = await import('./dossiers'); // lazy → avoid circular import
+  await insertFacts(dossier.id, null, docFacts);
+  await linkFacts(dossier.id, doc.id, doc.url);
+  return docFacts.length;
 }

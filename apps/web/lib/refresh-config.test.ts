@@ -16,4 +16,9 @@ describe('resolveRefreshConfig', () => {
     expect(resolveRefreshConfig({ VEILLE_REFRESH_CANDIDATES: '0' }).refreshCandidatesPerSource).toBe(6);
     expect(resolveRefreshConfig({ VEILLE_MAX_FACTS_PER_URL: '-1' }).maxFactsPerUrl).toBe(20);
   });
+  it('exposes relevance knobs (defaults + override)', () => {
+    expect(resolveRefreshConfig({}).relevanceKeepFloor).toBe(0.5);
+    expect(resolveRefreshConfig({}).relevanceContentBudget).toBe(6000);
+    expect(resolveRefreshConfig({ VEILLE_RELEVANCE_KEEP_FLOOR: '0.7' }).relevanceKeepFloor).toBe(0.7);
+  });
 });

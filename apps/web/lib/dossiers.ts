@@ -82,7 +82,7 @@ export async function listFacts(dossierId: string) {
   return db.select().from(facts).where(eq(facts.dossierId, dossierId)).orderBy(desc(facts.extractedAt));
 }
 
-export async function insertFacts(dossierId: string, sourceId: string, newFacts: Fact[]) {
+export async function insertFacts(dossierId: string, sourceId: string | null, newFacts: Fact[]) {
   if (newFacts.length === 0) return;
   await db.insert(facts).values(newFacts.map((f) => factToRow(f, dossierId, sourceId)));
 }

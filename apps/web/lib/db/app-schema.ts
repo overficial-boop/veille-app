@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, real, uuid, uniqueIndex, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, real, uuid, uniqueIndex, integer, boolean } from 'drizzle-orm/pg-core';
 import { user } from './auth-schema';
 
 export const dossiers = pgTable('dossiers', {
@@ -18,6 +18,7 @@ export const dossiers = pgTable('dossiers', {
   brief: text('brief'),
   briefGeneratedAt: timestamp('brief_generated_at', { withTimezone: true }),
   briefSuggestionDismissedAt: timestamp('brief_suggestion_dismissed_at', { withTimezone: true }),
+  autoBrief: boolean('auto_brief').notNull().default(false),
   sourceNotes: jsonb('source_notes').$type<Record<string, string>>(),
 }, (t) => [uniqueIndex('dossiers_owner_slug_idx').on(t.ownerId, t.slug)]);
 
@@ -52,6 +53,9 @@ export const documents = pgTable('documents', {
   kind: text('kind').notNull().default('web'), // 'web' | 'youtube'
   publishedAt: timestamp('published_at', { withTimezone: true }),
   content: text('content'),                    // extracted page/transcript text, kept for on-demand review generation
+  status: text('status').notNull().default('kept'),       // 'kept' | 'suggestion' | 'rejected'
+  relevance: real('relevance'),                            // 0..1 vs the dossier intent (null if unscored)
+  relevanceReason: text('relevance_reason'),
   shortSummary: text('short_summary'),
   review: jsonb('review'),
   bullets: jsonb('bullets'),
@@ -66,7 +70,6 @@ export const facts = pgTable('facts', {
     .notNull()
     .references(() => dossiers.id, { onDelete: 'cascade' }),
   sourceId: uuid('source_id')
-    .notNull()
     .references(() => sources.id, { onDelete: 'cascade' }),
   documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
   sourceUrl: text('source_url').notNull(),

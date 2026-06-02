@@ -74,3 +74,12 @@ export async function regenerateBriefAction(slug: string): Promise<void> {
   await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr' });
   revalidatePath(`/dossier/${slug}`);
 }
+
+export async function generateBriefAction(slug: string, scope?: string[]): Promise<void> {
+  const session = await getSession();
+  if (!session) return;
+  const dossier = await getDossier(session.user.id, slug);
+  if (!dossier) return;
+  await composeDossier(dossier.id, { mode: 'brief', language: dossier.language ?? 'fr', scope });
+  revalidatePath(`/dossier/${slug}`);
+}

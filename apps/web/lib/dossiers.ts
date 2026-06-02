@@ -27,7 +27,7 @@ export async function listDossiers(ownerId: string) {
   return rows.map((r) => ({ ...r, factCount: countMap[r.id] ?? 0 }));
 }
 
-export async function createDossier(ownerId: string, intent: string, plan: DossierPlan) {
+export async function createDossier(ownerId: string, intent: string, plan: DossierPlan, autoBrief = false) {
   const id = uuidv7();
   const base = slugify(plan.subjectName) || 'dossier';
   // ensure unique slug per owner
@@ -51,6 +51,7 @@ export async function createDossier(ownerId: string, intent: string, plan: Dossi
     cadence: plan.cadence ?? null,
     status: 'building',
     slug,
+    autoBrief,
   } as typeof dossiers.$inferInsert);
   await db.insert(sources).values(
     plan.sources.map((s) => ({

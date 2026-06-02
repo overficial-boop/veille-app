@@ -1,6 +1,6 @@
 import type { Fact } from '@veille/core';
-import { eq, desc } from 'drizzle-orm';
-import { dossiers, facts as factsTable, dossierUpdates } from './db/schema';
+import { eq, desc, and, inArray } from 'drizzle-orm';
+import { dossiers, facts as factsTable, dossierUpdates, documents as documentsTable } from './db/schema';
 import { selectLlmClient } from '@veille/core';
 import { hostOf } from './host';
 
@@ -163,7 +163,7 @@ async function newFactsCutoff(dossierId: string, briefGeneratedAt: Date | null):
 
 export async function composeDossier(
   dossierId: string,
-  opts: { mode: 'auto' | 'brief'; language?: string; onProgress?: (p: SynthesisProgress) => void } = { mode: 'auto' },
+  opts: { mode: 'auto' | 'brief'; language?: string; scope?: string[]; onProgress?: (p: SynthesisProgress) => void } = { mode: 'auto' },
 ): Promise<{ wrote: ComposeKind }> {
   const onProgress = opts.onProgress ?? (() => {});
 
@@ -175,20 +175,73 @@ export async function composeDossier(
 
   const language = opts.language ?? dossier.language ?? 'fr';
 
+  // In brief mode: determine target documents (scope or all kept), ensure facts exist for each.
+  if (opts.mode === 'brief') {
+    let targetDocs: { id: string; url: string; title: string | null; content: string | null }[];
+    if (opts.scope && opts.scope.length > 0) {
+      targetDocs = await db
+        .select({ id: documentsTable.id, url: documentsTable.url, title: documentsTable.title, content: documentsTable.content })
+        .from(documentsTable)
+        .where(and(eq(documentsTable.dossierId, dossierId), inArray(documentsTable.id, opts.scope)));
+    } else {
+      targetDocs = await db
+        .select({ id: documentsTable.id, url: documentsTable.url, title: documentsTable.title, content: documentsTable.content })
+        .from(documentsTable)
+        .where(and(eq(documentsTable.dossierId, dossierId), eq(documentsTable.status, 'kept')));
+    }
+
+    // Idempotently ensure facts for each target document that has none yet.
+    if (targetDocs.length > 0) {
+      const { extractFactsForDocument } = await import('./documents');
+      for (const doc of targetDocs) {
+        await extractFactsForDocument(dossier, doc);
+      }
+    }
+
+    const targetDocIds = new Set(targetDocs.map((d) => d.id));
+
+    // Load all facts for the dossier, then filter to scope if set.
+    const allRows = await db.select().from(factsTable).where(eq(factsTable.dossierId, dossierId));
+    const scopedRows = opts.scope && opts.scope.length > 0
+      ? allRows.filter((r) => r.documentId != null && targetDocIds.has(r.documentId))
+      : allRows;
+
+    const hasFacts = scopedRows.length > 0;
+    const briefExists = !!dossier.brief;
+
+    const kind = hasFacts ? 'brief' : 'none';
+
+    if (kind === 'none') {
+      onProgress({ type: 'synthesis', phase: briefExists ? 'update' : 'brief', state: 'skip' });
+      return { wrote: 'none' };
+    }
+
+    const { setBrief } = await import('./dossiers');
+    const client = selectLlmClient(process.env as Record<string, string | undefined>);
+    const subject = [dossier.name, dossier.intent].filter(Boolean).join(' — ');
+
+    onProgress({ type: 'synthesis', phase: 'brief', state: 'start' });
+    const groups = groupFactsByHost(scopedRows.map(toFact));
+    const res = await client.complete(buildBriefPrompt(subject, language, groups), { jsonSchema: BRIEF_SCHEMA });
+    const { brief, sourceNotes } = parseBrief(res.text);
+    const allowedUrls = new Set(scopedRows.map((r) => r.sourceUrl));
+    const safeBrief = brief ? stripUnknownLinks(brief, allowedUrls) : brief;
+    if (safeBrief) await setBrief(dossierId, safeBrief, sourceNotes);
+    onProgress({ type: 'synthesis', phase: 'brief', state: 'done' });
+    return { wrote: 'brief' };
+  }
+
   const allRows = await db.select().from(factsTable).where(eq(factsTable.dossierId, dossierId));
   const hasFacts = allRows.length > 0;
   const briefExists = !!dossier.brief;
-  // In 'brief' mode we force regeneration, so treat the brief as absent for the decision.
-  const hasBrief = briefExists && opts.mode === 'auto';
+  // In 'auto' mode we do not force regeneration.
+  const hasBrief = briefExists;
 
-  const cutoff = opts.mode !== 'brief' ? await newFactsCutoff(dossierId, dossier.briefGeneratedAt ?? null) : null;
+  const cutoff = await newFactsCutoff(dossierId, dossier.briefGeneratedAt ?? null);
   const newRows = cutoff ? allRows.filter((r) => r.createdAt > cutoff) : allRows;
   const hasNewFacts = newRows.length > 0;
 
-  const kind =
-    opts.mode === 'brief'
-      ? hasFacts ? 'brief' : 'none'
-      : decideCompose({ hasFacts, hasBrief, hasNewFacts });
+  const kind = decideCompose({ hasFacts, hasBrief, hasNewFacts });
 
   if (kind === 'none') {
     onProgress({ type: 'synthesis', phase: briefExists ? 'update' : 'brief', state: 'skip' });

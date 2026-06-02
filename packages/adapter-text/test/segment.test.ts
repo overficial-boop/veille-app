@@ -32,9 +32,18 @@ describe('segmentByParagraph', () => {
     ]);
   });
 
-  it('trims and collapses whitespace inside a paragraph', () => {
-    const result = segmentByParagraph('  Multi   spaces\n  and a wrapped line.  ');
-    expect(result).toEqual([{ start: 0, end: 0, text: 'Multi spaces and a wrapped line.' }]);
+  it('trims and collapses repeated spaces inside a paragraph', () => {
+    const result = segmentByParagraph('  Multi   spaces  in one line.  ');
+    expect(result).toEqual([{ start: 0, end: 0, text: 'Multi spaces in one line.' }]);
+  });
+
+  it('splits on a SINGLE newline too (stored web content joins paragraphs with one \\n)', () => {
+    const result = segmentByParagraph('First.\nSecond.\nThird.');
+    expect(result).toEqual([
+      { start: 0, end: 0, text: 'First.' },
+      { start: 1, end: 1, text: 'Second.' },
+      { start: 2, end: 2, text: 'Third.' },
+    ]);
   });
 
   it('ignores empty paragraphs at the start or end', () => {

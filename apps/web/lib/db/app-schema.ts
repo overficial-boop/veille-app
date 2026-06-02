@@ -51,6 +51,7 @@ export const documents = pgTable('documents', {
   siteName: text('site_name'),                 // host, or YouTube channel name
   kind: text('kind').notNull().default('web'), // 'web' | 'youtube'
   publishedAt: timestamp('published_at', { withTimezone: true }),
+  content: text('content'),                    // extracted page/transcript text, kept for on-demand review generation
   shortSummary: text('short_summary'),
   review: jsonb('review'),
   bullets: jsonb('bullets'),

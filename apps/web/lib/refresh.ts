@@ -10,8 +10,7 @@ import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
 import { backfillPublishedAt, isRecentCandidate } from './temporal';
 import { insertFacts } from './dossiers';
 import type { SynthesisProgress } from './synthesis';
-import { upsertDocument, linkFacts, setDocumentCore } from './documents';
-import { analyzeDocumentCore } from './document/analyze';
+import { upsertDocument, linkFacts } from './documents';
 import { hostOf } from './host';
 import { getRefreshConfig } from './refresh-config';
 
@@ -82,114 +81,99 @@ export async function refreshDossier(
   let total = seen.size; // running tally of all facts in the dossier (pre-existing + newly added)
   let added = 0; // facts inserted during this refresh run only — gates synthesis in the SSE routes
 
+  // Extract one URL, persist its facts + the document (keeping the raw content for on-demand
+  // review generation), dedup against what we've already seen, and return how many NEW facts were
+  // stored. Review/bullets are intentionally NOT generated here — they're produced on demand when
+  // a document is opened, so the assemble stays fast and surfaces facts immediately.
+  async function processCandidate(
+    sourceId: string,
+    url: string,
+    candPublishedAt: string | undefined,
+    candTitle: string | undefined,
+  ): Promise<number> {
+    let captured = '';
+    const top = topFactsPerUrl(
+      await extract(url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
+      cfg.maxFactsPerUrl,
+    );
+    // Backfill publication date from the discovery candidate when the adapter didn't find one.
+    const withDates = top.map((f) => backfillPublishedAt(f, candPublishedAt));
+    // Drop facts the model scored as weakly-relevant (keep unscored); applied BEFORE dedup so
+    // `seen` only tracks facts we actually keep.
+    const relevant =
+      subjectHint.length > 0
+        ? withDates.filter((f) => {
+            const r = (f.provenance as { relevance?: number } | null)?.relevance;
+            return typeof r !== 'number' || r >= cfg.factRelevanceFloor;
+          })
+        : withDates;
+    const fresh = filterNewFacts(relevant, seen);
+    const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(url);
+    const prov0 = withDates[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
+    const siteName = yt ? (prov0?.channelName || 'youtube.com') : hostOf(url);
+    const publishedAt = prov0?.publishedAt
+      ? new Date(prov0.publishedAt)
+      : candPublishedAt ? new Date(candPublishedAt) : null;
+    const { id: docId } = await upsertDocument(dossierId, {
+      url,
+      title: candTitle ?? url,
+      siteName,
+      kind: yt ? 'youtube' : 'web',
+      publishedAt,
+      content: captured,
+    });
+    if (fresh.length) await insertFacts(dossierId, sourceId, fresh);
+    await linkFacts(dossierId, docId, url);
+    return fresh.length;
+  }
+
   for (const src of srcRows) {
     const needs = src.kind === 'standing' || !src.lastExtractedAt || opts.force;
     if (!needs) continue;
     onProgress({ type: 'source-start', label: src.label ?? src.connector });
+    let srcAdded = 0;
     try {
-      let extracted: Fact[] = [];
-      const pendingDocs: { docId: string; url: string; content: string; title: string; siteName?: string; needsCore: boolean }[] = [];
       if (src.kind === 'standing') {
         const cands = await candidatesFor(src, daysSince);
         // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
         const candidates = cands.filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
-        // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates
-        // mutates seenUrls (marks what it returns as seen). Filtering first means only the
-        // URLs we actually mine get marked seen; weaker ones can resurface on a later refresh.
-        // Unscored candidates (RSS / YouTube-channel set no score) pass the floor;
-        // only scored (Tavily) candidates must clear it. The cap still bounds all.
+        // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates mutates
+        // seenUrls (marks what it returns as seen). Filtering first means only the URLs we actually
+        // mine get marked seen; weaker ones can resurface on a later refresh. Unscored candidates
+        // (RSS / YouTube-channel) pass the floor; only scored (Tavily) ones must clear it.
         const ranked = [...candidates]
           .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .slice(0, candidatesPerSource);
-        // On refresh: drop candidates whose publication date is known and older than lastRefresh.
-        // Undated candidates (no publishedAt) are KEPT — benefit of the doubt (recency-biased
-        // search means they're likely new). On assemble (lastRefresh=null) every candidate passes.
+        // On refresh: drop candidates published on/before the last refresh; keep undated ones
+        // (benefit of the doubt). On assemble (lastRefresh=null) every candidate passes.
         const recencyFiltered = phase === 'refresh'
           ? ranked.filter((c) => isRecentCandidate(c.publishedAt, lastRefresh))
           : ranked;
-        // skip candidate URLs already extracted on a prior refresh (spec §5); the
-        // (sourceUrl,text) dedup below is the secondary, fact-level guard.
+        // Process candidates one at a time, surfacing facts as we go so the UI count climbs live
+        // instead of waiting for the whole source to finish.
         for (const c of freshCandidates(recencyFiltered, seenUrls)) {
-          const adapter = findAdapter({ kind: 'url', url: c.url });
-          if (!adapter) continue;
+          if (!findAdapter({ kind: 'url', url: c.url })) continue;
           try {
-            let captured = '';
-            const top = topFactsPerUrl(
-              await extract(c.url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
-              cfg.maxFactsPerUrl,
-            );
-            // Backfill publication date from the discovery candidate (Tavily published_date /
-            // RSS pubDate) when the adapter didn't find one — improves stream classification.
-            const withDates = top.map((f) => backfillPublishedAt(f, c.publishedAt));
-            extracted = extracted.concat(withDates);
-            const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(c.url);
-            const prov0 = withDates[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
-            const siteName = yt ? (prov0?.channelName || 'youtube.com') : hostOf(c.url);
-            const publishedAt = prov0?.publishedAt
-              ? new Date(prov0.publishedAt)
-              : c.publishedAt ? new Date(c.publishedAt) : null;
-            const title = c.title ?? c.url;
-            const { id: docId, needsCore } = await upsertDocument(dossierId, {
-              url: c.url,
-              title,
-              siteName,
-              kind: yt ? 'youtube' : 'web',
-              publishedAt,
-            });
-            pendingDocs.push({ docId, url: c.url, content: captured, title, siteName, needsCore });
+            const n = await processCandidate(src.id, c.url, c.publishedAt, c.title);
+            total += n;
+            added += n;
+            srcAdded += n;
+            onProgress({ type: 'facts', sourceLabel: src.label ?? src.connector, added: srcAdded, total });
           } catch {
             /* skip a bad candidate URL, keep going */
           }
         }
       } else {
         const url = (src.input as { url: string }).url;
-        let captured = '';
-        extracted = topFactsPerUrl(
-          await extract(url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
-          cfg.maxFactsPerUrl,
-        );
-        const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(url);
-        const prov0 = extracted[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
-        const siteName = yt ? (prov0?.channelName || 'youtube.com') : hostOf(url);
-        const publishedAt = prov0?.publishedAt ? new Date(prov0.publishedAt) : null;
-        const { id: docId, needsCore } = await upsertDocument(dossierId, {
-          url,
-          title: src.label ?? url,
-          siteName,
-          kind: yt ? 'youtube' : 'web',
-          publishedAt,
-        });
-        pendingDocs.push({ docId, url, content: captured, title: src.label ?? url, siteName, needsCore });
-      }
-      // Drop facts the model scored as weakly-relevant to the subject (only when we have a
-      // subjectHint; unscored facts are KEPT). Applied BEFORE dedup so `seen` tracks only
-      // facts we actually keep.
-      const relevantExtracted =
-        subjectHint.length > 0
-          ? extracted.filter((f) => {
-              const r = (f.provenance as { relevance?: number } | null)?.relevance;
-              return typeof r !== 'number' || r >= cfg.factRelevanceFloor; // keep if unscored or above floor
-            })
-          : extracted;
-      const fresh = filterNewFacts(relevantExtracted, seen);
-      // group fresh facts by their real sourceUrl is unnecessary — store under this source row
-      await insertFacts(dossierId, src.id, fresh);
-      total += fresh.length;
-      added += fresh.length;
-      // Link facts to their documents and auto-analyze (review + bullets) for each new document.
-      for (const d of pendingDocs) {
-        await linkFacts(dossierId, d.docId, d.url);
-        if (!d.content || !d.needsCore) continue;
-        try {
-          const core = await analyzeDocumentCore({ content: d.content, title: d.title, siteName: d.siteName, lang });
-          await setDocumentCore(d.docId, core);
-        } catch (e) {
-          onProgress({ type: 'source-error', label: d.url, message: e instanceof Error ? e.message : String(e) });
-        }
+        const n = await processCandidate(src.id, url, undefined, src.label ?? undefined);
+        total += n;
+        added += n;
+        srcAdded += n;
       }
       await db.update(sources).set({ lastExtractedAt: new Date() }).where(eq(sources.id, src.id));
-      onProgress({ type: 'facts', sourceLabel: src.label ?? src.connector, added: fresh.length, total });
+      // Final settle for this source — also resolves sources that yielded nothing new.
+      onProgress({ type: 'facts', sourceLabel: src.label ?? src.connector, added: srcAdded, total });
     } catch (e) {
       // leave lastExtractedAt unset so it retries next refresh
       onProgress({ type: 'source-error', label: src.label ?? src.connector, message: e instanceof Error ? e.message : String(e) });

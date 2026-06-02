@@ -41,6 +41,8 @@ interface DocumentFicheProps {
   document: DocumentProp;
   facts: FactProp[];
   slug: string;
+  /** Whether raw content was stored for this document, so the review can be generated on demand. */
+  canAnalyze: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -67,7 +69,15 @@ function CostLine({ cost }: { cost: TokenCost }) {
 /* Main component                                                       */
 /* ------------------------------------------------------------------ */
 
-export function DocumentFiche({ document: doc, facts, slug }: DocumentFicheProps) {
+export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: DocumentFicheProps) {
+  // Review/bullets/summary are generated on demand (the assemble no longer does it inline), so they
+  // live in state: seeded from the server, then filled in when generation completes.
+  const [shortSummary, setShortSummary] = React.useState<string | null>(doc.shortSummary);
+  const [review, setReview] = React.useState<ReviewBlock | null>(doc.review);
+  const [bullets, setBullets] = React.useState<BulletsBlock | null>(doc.bullets);
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [analyzeError, setAnalyzeError] = React.useState<string | null>(null);
+
   const [elaboration, setElaboration] = React.useState<ElaborationBlock | null>(doc.elaboration);
   const [factChecks, setFactChecks] = React.useState<FactChecksBlock | null>(doc.factChecks);
   const [elaborating, setElaborating] = React.useState(false);
@@ -75,6 +85,37 @@ export function DocumentFiche({ document: doc, facts, slug }: DocumentFicheProps
   const [withTavily, setWithTavily] = React.useState(false);
   const [elaborateError, setElaborateError] = React.useState<string | null>(null);
   const [factCheckError, setFactCheckError] = React.useState<string | null>(null);
+
+  const handleAnalyze = React.useCallback(async () => {
+    setAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      const res = await fetch(`/api/dossiers/${slug}/documents/${doc.id}/analyze`, { method: 'POST' });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => res.statusText);
+        setAnalyzeError(msg || 'Erreur inconnue');
+      } else {
+        const core = (await res.json()) as { shortSummary: string; review: ReviewBlock; bullets: BulletsBlock };
+        setShortSummary(core.shortSummary);
+        setReview(core.review);
+        setBullets(core.bullets);
+      }
+    } catch (e) {
+      setAnalyzeError(e instanceof Error ? e.message : 'Erreur réseau');
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [slug, doc.id]);
+
+  // Auto-generate the review the first time a document is opened without one (and only if we kept
+  // its content). The ref guards against React strict-mode's double-invoke firing two requests.
+  const analyzeTriggered = React.useRef(false);
+  React.useEffect(() => {
+    if (!review && canAnalyze && !analyzeTriggered.current) {
+      analyzeTriggered.current = true;
+      void handleAnalyze();
+    }
+  }, [review, canAnalyze, handleAnalyze]);
 
   async function handleElaborate() {
     setElaborating(true);
@@ -125,8 +166,8 @@ export function DocumentFiche({ document: doc, facts, slug }: DocumentFicheProps
     <div style={{ marginTop: '2rem' }}>
 
       {/* Résumé court */}
-      {doc.shortSummary && (
-        <p className="fiche-lead">{doc.shortSummary}</p>
+      {shortSummary && (
+        <p className="fiche-lead">{shortSummary}</p>
       )}
 
       {/* Review */}
@@ -137,20 +178,37 @@ export function DocumentFiche({ document: doc, facts, slug }: DocumentFicheProps
             <h2 style={{ marginTop: '.1rem' }}>Review</h2>
           </div>
         </div>
-        {doc.review ? (
+        {review ? (
           <>
-            <Prose>{doc.review.markdown}</Prose>
-            <CostLine cost={doc.review.cost} />
+            <Prose>{review.markdown}</Prose>
+            <CostLine cost={review.cost} />
           </>
+        ) : analyzing ? (
+          <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
+            Analyse en cours…
+          </p>
+        ) : analyzeError ? (
+          <div>
+            <p style={{ fontStyle: 'italic', color: 'var(--danger)', fontSize: '1rem', marginBottom: '.5rem' }}>
+              Analyse indisponible — {analyzeError}
+            </p>
+            <Btn variant="soft" size="sm" onClick={handleAnalyze} disabled={analyzing}>
+              Réessayer
+            </Btn>
+          </div>
+        ) : canAnalyze ? (
+          <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
+            Analyse en attente…
+          </p>
         ) : (
           <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
-            Analyse en attente.
+            Analyse indisponible (contenu non conservé).
           </p>
         )}
       </section>
 
       {/* Résumé en puces */}
-      {doc.bullets && (
+      {bullets && (
         <section className="section" style={{ marginTop: '2rem' }}>
           <div className="section-head">
             <div className="ttl">
@@ -158,8 +216,8 @@ export function DocumentFiche({ document: doc, facts, slug }: DocumentFicheProps
               <h2 style={{ marginTop: '.1rem' }}>En bref</h2>
             </div>
           </div>
-          <Prose>{doc.bullets.markdown}</Prose>
-          <CostLine cost={doc.bullets.cost} />
+          <Prose>{bullets.markdown}</Prose>
+          <CostLine cost={bullets.cost} />
         </section>
       )}
 

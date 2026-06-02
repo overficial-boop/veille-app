@@ -57,6 +57,13 @@
       "when": 1780322043387,
       "tag": "0007_charming_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780386255176,
+      "tag": "0008_parched_vulcan",
+      "breakpoints": true
     }
   ]
 }

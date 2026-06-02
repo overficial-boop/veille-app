@@ -63,6 +63,26 @@ export async function setDocumentCore(
     .where(eq(documents.id, id));
 }
 
+/** Idempotently generate + store a document's core (shortSummary/review/bullets) from its STORED
+ *  content. Returns true if it generated, false if already present or no content. Shared by the
+ *  fiche analyze route and the brief-generation enrichment loop. */
+export async function ensureDocumentCore(
+  dossier: { id: string; language: string | null },
+  doc: { id: string; url: string; title: string | null; siteName: string | null; content: string | null; review: unknown },
+): Promise<boolean> {
+  if (doc.review) return false;
+  if (!doc.content) return false;
+  const { analyzeDocumentCore } = await import('./document/analyze');
+  const core = await analyzeDocumentCore({
+    content: doc.content,
+    title: doc.title ?? doc.url,
+    siteName: doc.siteName ?? undefined,
+    lang: dossier.language ?? 'fr',
+  });
+  await setDocumentCore(doc.id, core);
+  return true;
+}
+
 export async function setElaboration(id: string, block: ElaborationBlock) {
   await db
     .update(documents)

@@ -7,7 +7,7 @@ import { discoverTavily, discoverRss, discoverYouTubeChannel } from '@veille/dis
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
-import { backfillPublishedAt } from './temporal';
+import { backfillPublishedAt, isRecentCandidate } from './temporal';
 import { insertFacts } from './dossiers';
 import type { SynthesisProgress } from './synthesis';
 import { upsertDocument, linkFacts, setDocumentCore } from './documents';
@@ -25,8 +25,11 @@ export type StreamProgress = RefreshProgress | SynthesisProgress;
 
 type SourceRow = typeof sources.$inferSelect;
 
-async function candidatesFor(source: SourceRow): Promise<Candidate[]> {
-  if (source.connector === 'tavily') return discoverTavily(source.input as never);
+async function candidatesFor(source: SourceRow, daysOverride?: number): Promise<Candidate[]> {
+  if (source.connector === 'tavily') {
+    const input = daysOverride ? { ...(source.input as object), days: daysOverride } : source.input;
+    return discoverTavily(input as never);
+  }
   if (source.connector === 'rss') return discoverRss(source.input as never);
   if (source.connector === 'youtube-channel') return discoverYouTubeChannel(source.input as never);
   return [];
@@ -61,6 +64,17 @@ export async function refreshDossier(
     ? [dossier.name, dossier.intent].filter(Boolean).join(' — ')
     : '';
 
+  // Recency window: only meaningful on refresh (not assemble). Uses the most recent timestamp
+  // available — refreshedAt first, falling back to briefGeneratedAt — as the "last seen" mark.
+  const lastRefresh = phase === 'refresh' && dossier
+    ? (dossier.refreshedAt ?? dossier.briefGeneratedAt ?? null)
+    : null;
+  // daysSince tells Tavily how far back to search. Minimum 1 day so we never ask for 0 days.
+  // undefined when assemble (no window) or when no prior timestamp exists (first run).
+  const daysSince = lastRefresh
+    ? Math.max(1, Math.ceil((Date.now() - lastRefresh.getTime()) / 86_400_000))
+    : undefined;
+
   const srcRows = await db.select().from(sources).where(eq(sources.dossierId, dossierId));
   const existing = await db.select({ sourceUrl: facts.sourceUrl, text: facts.text }).from(facts).where(eq(facts.dossierId, dossierId));
   const seen = new Set(existing.map((e) => dedupKey(e)));
@@ -76,7 +90,7 @@ export async function refreshDossier(
       let extracted: Fact[] = [];
       const pendingDocs: { docId: string; url: string; content: string; title: string; siteName?: string; needsCore: boolean }[] = [];
       if (src.kind === 'standing') {
-        const cands = await candidatesFor(src);
+        const cands = await candidatesFor(src, daysSince);
         // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
         const candidates = cands.filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
         // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates
@@ -88,9 +102,15 @@ export async function refreshDossier(
           .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .slice(0, candidatesPerSource);
+        // On refresh: drop candidates whose publication date is known and older than lastRefresh.
+        // Undated candidates (no publishedAt) are KEPT — benefit of the doubt (recency-biased
+        // search means they're likely new). On assemble (lastRefresh=null) every candidate passes.
+        const recencyFiltered = phase === 'refresh'
+          ? ranked.filter((c) => isRecentCandidate(c.publishedAt, lastRefresh))
+          : ranked;
         // skip candidate URLs already extracted on a prior refresh (spec §5); the
         // (sourceUrl,text) dedup below is the secondary, fact-level guard.
-        for (const c of freshCandidates(ranked, seenUrls)) {
+        for (const c of freshCandidates(recencyFiltered, seenUrls)) {
           const adapter = findAdapter({ kind: 'url', url: c.url });
           if (!adapter) continue;
           try {

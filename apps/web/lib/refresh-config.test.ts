@@ -20,4 +20,10 @@ describe('resolveRefreshConfig', () => {
     expect(resolveRefreshConfig({}).relevanceContentBudget).toBe(6000);
     expect(resolveRefreshConfig({ VEILLE_RELEVANCE_KEEP_FLOOR: '0.7' }).relevanceKeepFloor).toBe(0.7);
   });
+  it('exposes journal knobs (defaults + override)', () => {
+    expect(resolveRefreshConfig({}).journalEnabled).toBe(true);
+    expect(resolveRefreshConfig({}).journalMaxPerRefresh).toBe(5);
+    expect(resolveRefreshConfig({ VEILLE_JOURNAL_ENABLED: 'false', VEILLE_JOURNAL_MAX: '3' }).journalEnabled).toBe(false);
+    expect(resolveRefreshConfig({ VEILLE_JOURNAL_MAX: '3' }).journalMaxPerRefresh).toBe(3);
+  });
 });

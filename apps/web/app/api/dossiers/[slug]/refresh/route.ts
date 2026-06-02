@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
       const enc = new TextEncoder();
       const send = (p: StreamProgress) => controller.enqueue(enc.encode(`data: ${JSON.stringify(p)}\n\n`));
       try {
-        const { added } = await refreshDossier(dossier.id, { language: dossier.language ?? 'fr', onProgress: send });
+        const { added } = await refreshDossier(dossier.id, { phase: 'refresh', language: dossier.language ?? 'fr', onProgress: send });
         if (added > 0 || !dossier.brief) {
           try {
             await composeDossier(dossier.id, { mode: 'auto', language: dossier.language ?? 'fr', onProgress: send });

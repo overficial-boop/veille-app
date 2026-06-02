@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDate, factPublishedAt, classify, backfillPublishedAt, countPendingRebuild } from './temporal';
+import { parseDate, factPublishedAt, backfillPublishedAt, isRecentCandidate } from './temporal';
 
 describe('parseDate', () => {
   it('parses ISO dates', () => {
@@ -23,23 +23,6 @@ describe('factPublishedAt', () => {
   });
 });
 
-describe('classify', () => {
-  const cutoff = new Date('2026-05-29T00:00:00Z');
-  it('after cutoff => actualite', () => {
-    expect(classify({ provenance: { publishedAt: '2026-05-30' } }, cutoff)).toBe('actualite');
-  });
-  it('on/before cutoff => complement', () => {
-    expect(classify({ provenance: { publishedAt: '2025-08-15' } }, cutoff)).toBe('complement');
-    expect(classify({ provenance: { publishedAt: '2026-05-29T00:00:00Z' } }, cutoff)).toBe('complement');
-  });
-  it('unknown date => complement', () => {
-    expect(classify({ provenance: {} }, cutoff)).toBe('complement');
-  });
-  it('null cutoff (first update) => actualite', () => {
-    expect(classify({ provenance: {} }, null)).toBe('actualite');
-  });
-});
-
 describe('backfillPublishedAt', () => {
   it('fills publishedAt from candidate when missing', () => {
     const f = backfillPublishedAt({ provenance: { foo: 1 } }, '2026-05-30');
@@ -57,28 +40,19 @@ describe('backfillPublishedAt', () => {
   });
 });
 
-describe('countPendingRebuild', () => {
-  const brief = new Date('2026-05-29T00:00:00Z');
-  const mk = (createdAt: string, publishedAt?: string) => ({ createdAt: new Date(createdAt), provenance: publishedAt ? { publishedAt } : {} });
-
-  it('returns 0 when no brief yet', () => {
-    expect(countPendingRebuild([mk('2026-05-30', '2020-01-01')], null, null)).toBe(0);
+describe('isRecentCandidate', () => {
+  const last = new Date('2026-05-29T00:00:00Z');
+  it('undated → recent (benefit of the doubt)', () => {
+    expect(isRecentCandidate(undefined, last)).toBe(true);
   });
-  it('counts old-published facts created after the brief', () => {
-    expect(countPendingRebuild([mk('2026-05-30', '2025-08-15')], brief, null)).toBe(1);
+  it('published after last refresh → recent', () => {
+    expect(isRecentCandidate('2026-05-30', last)).toBe(true);
   });
-  it('ignores recent-published facts (they belong to the journal)', () => {
-    expect(countPendingRebuild([mk('2026-05-30', '2026-05-30')], brief, null)).toBe(0);
+  it('published on/before last refresh → not recent', () => {
+    expect(isRecentCandidate('2025-08-15', last)).toBe(false);
+    expect(isRecentCandidate('2026-05-29T00:00:00Z', last)).toBe(false);
   });
-  it('counts undated facts (conservative)', () => {
-    expect(countPendingRebuild([mk('2026-05-30')], brief, null)).toBe(1);
-  });
-  it('excludes facts created on/before the brief', () => {
-    expect(countPendingRebuild([mk('2026-05-28', '2025-08-15')], brief, null)).toBe(0);
-  });
-  it('snooze: counts only facts created after dismissedAt', () => {
-    const dismissed = new Date('2026-05-31T00:00:00Z');
-    const facts = [mk('2026-05-30', '2025-08-15'), mk('2026-06-01', '2025-08-16')];
-    expect(countPendingRebuild(facts, brief, dismissed)).toBe(1);
+  it('null lastRefresh → recent', () => {
+    expect(isRecentCandidate('2020-01-01', null)).toBe(true);
   });
 });

@@ -84,17 +84,11 @@ describe('stripUnknownLinks', () => {
   });
 });
 
-describe('buildUpdatePrompt framing', () => {
+describe('buildUpdatePrompt', () => {
   const g = [{ host: 'lemonde.fr', facts: [] }];
-  it('actualite framing mentions recent developments', () => {
-    expect(buildUpdatePrompt('X', 'fr', 'b', g, 'actualite')).toMatch(/RECENT developments/);
-  });
-  it('complement framing mentions older items', () => {
-    expect(buildUpdatePrompt('X', 'fr', 'b', g, 'complement')).toMatch(/OLDER items/);
-  });
-  it('requires proper [texte](url) links and forbids bare/bracketed URLs', () => {
-    const p = buildUpdatePrompt('X', 'fr', 'b', g, 'actualite');
-    expect(p).toMatch(/\[texte\]\(url\)/);
-    expect(p).toMatch(/NEVER output a bare or bracketed URL/);
+  it('asks for clean prose with no links/citations', () => {
+    const p = buildUpdatePrompt('X', 'fr', 'b', g);
+    expect(p).toMatch(/do NOT add Markdown links/);
+    expect(p).toContain('lemonde.fr');
   });
 });

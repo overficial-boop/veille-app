@@ -7,18 +7,13 @@ import { discoverTavily, discoverRss, discoverYouTubeChannel } from '@veille/dis
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { dedupKey, filterNewFacts, freshCandidates } from './dedup';
-import { backfillPublishedAt } from './temporal';
+import { backfillPublishedAt, isRecentCandidate } from './temporal';
 import { insertFacts } from './dossiers';
 import type { SynthesisProgress } from './synthesis';
 import { upsertDocument, linkFacts, setDocumentCore } from './documents';
 import { analyzeDocumentCore } from './document/analyze';
 import { hostOf } from './host';
-
-// --- Relevance tuning knobs (calibrated empirically; see R3) ---
-const CANDIDATE_SCORE_FLOOR = 0.4;    // drop weaker results — only applied to scored (Tavily) candidates
-const MAX_CANDIDATES_PER_SOURCE = 6;  // cap URLs mined per standing source per refresh
-const FACT_RELEVANCE_FLOOR = 0.5;     // drop extracted facts less relevant than this to the subject
-const MAX_FACTS_PER_URL = 20;         // backstop: keep at most the top-N facts from any single page
+import { getRefreshConfig } from './refresh-config';
 
 export type RefreshProgress =
   | { type: 'source-start'; label: string }
@@ -30,8 +25,11 @@ export type StreamProgress = RefreshProgress | SynthesisProgress;
 
 type SourceRow = typeof sources.$inferSelect;
 
-async function candidatesFor(source: SourceRow): Promise<Candidate[]> {
-  if (source.connector === 'tavily') return discoverTavily(source.input as never);
+async function candidatesFor(source: SourceRow, daysOverride?: number): Promise<Candidate[]> {
+  if (source.connector === 'tavily') {
+    const input = daysOverride ? { ...(source.input as object), days: daysOverride } : source.input;
+    return discoverTavily(input as never);
+  }
   if (source.connector === 'rss') return discoverRss(source.input as never);
   if (source.connector === 'youtube-channel') return discoverYouTubeChannel(source.input as never);
   return [];
@@ -49,9 +47,15 @@ function topFactsPerUrl(urlFacts: Fact[], n: number): Fact[] {
 
 export async function refreshDossier(
   dossierId: string,
-  opts: { force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void } = {},
+  opts: { phase?: 'assemble' | 'refresh'; force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void } = {},
 ): Promise<{ total: number; added: number }> {
   registerAllAdapters();
+  // Depth knobs come from config. Only the candidate cap varies by phase — assemble goes
+  // deep (more URLs per source), refresh stays shallow; the floors + max-facts-per-url are
+  // phase-independent (read directly from cfg).
+  const cfg = getRefreshConfig();
+  const phase = opts.phase ?? 'refresh';
+  const candidatesPerSource = phase === 'assemble' ? cfg.assembleCandidatesPerSource : cfg.refreshCandidatesPerSource;
   const onProgress = opts.onProgress ?? (() => {});
   const lang = opts.language ?? 'fr';
 
@@ -59,6 +63,17 @@ export async function refreshDossier(
   const subjectHint = dossier
     ? [dossier.name, dossier.intent].filter(Boolean).join(' — ')
     : '';
+
+  // Recency window: only meaningful on refresh (not assemble). Uses the most recent timestamp
+  // available — refreshedAt first, falling back to briefGeneratedAt — as the "last seen" mark.
+  const lastRefresh = phase === 'refresh' && dossier
+    ? (dossier.refreshedAt ?? dossier.briefGeneratedAt ?? null)
+    : null;
+  // daysSince tells Tavily how far back to search. Minimum 1 day so we never ask for 0 days.
+  // undefined when assemble (no window) or when no prior timestamp exists (first run).
+  const daysSince = lastRefresh
+    ? Math.max(1, Math.ceil((Date.now() - lastRefresh.getTime()) / 86_400_000))
+    : undefined;
 
   const srcRows = await db.select().from(sources).where(eq(sources.dossierId, dossierId));
   const existing = await db.select({ sourceUrl: facts.sourceUrl, text: facts.text }).from(facts).where(eq(facts.dossierId, dossierId));
@@ -75,7 +90,7 @@ export async function refreshDossier(
       let extracted: Fact[] = [];
       const pendingDocs: { docId: string; url: string; content: string; title: string; siteName?: string; needsCore: boolean }[] = [];
       if (src.kind === 'standing') {
-        const cands = await candidatesFor(src);
+        const cands = await candidatesFor(src, daysSince);
         // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
         const candidates = cands.filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
         // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates
@@ -84,19 +99,25 @@ export async function refreshDossier(
         // Unscored candidates (RSS / YouTube-channel set no score) pass the floor;
         // only scored (Tavily) candidates must clear it. The cap still bounds all.
         const ranked = [...candidates]
-          .filter((c) => c.score === undefined || c.score >= CANDIDATE_SCORE_FLOOR)
+          .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .slice(0, MAX_CANDIDATES_PER_SOURCE);
+          .slice(0, candidatesPerSource);
+        // On refresh: drop candidates whose publication date is known and older than lastRefresh.
+        // Undated candidates (no publishedAt) are KEPT — benefit of the doubt (recency-biased
+        // search means they're likely new). On assemble (lastRefresh=null) every candidate passes.
+        const recencyFiltered = phase === 'refresh'
+          ? ranked.filter((c) => isRecentCandidate(c.publishedAt, lastRefresh))
+          : ranked;
         // skip candidate URLs already extracted on a prior refresh (spec §5); the
         // (sourceUrl,text) dedup below is the secondary, fact-level guard.
-        for (const c of freshCandidates(ranked, seenUrls)) {
+        for (const c of freshCandidates(recencyFiltered, seenUrls)) {
           const adapter = findAdapter({ kind: 'url', url: c.url });
           if (!adapter) continue;
           try {
             let captured = '';
             const top = topFactsPerUrl(
               await extract(c.url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
-              MAX_FACTS_PER_URL,
+              cfg.maxFactsPerUrl,
             );
             // Backfill publication date from the discovery candidate (Tavily published_date /
             // RSS pubDate) when the adapter didn't find one — improves stream classification.
@@ -126,7 +147,7 @@ export async function refreshDossier(
         let captured = '';
         extracted = topFactsPerUrl(
           await extract(url, { language: lang, withSummary: false, subjectHint, onContent: (t) => { captured = t; } }),
-          MAX_FACTS_PER_URL,
+          cfg.maxFactsPerUrl,
         );
         const yt = /(?:^|\.)youtube\.com|youtu\.be/i.test(url);
         const prov0 = extracted[0]?.provenance as { channelName?: string; publishedAt?: string } | undefined;
@@ -148,7 +169,7 @@ export async function refreshDossier(
         subjectHint.length > 0
           ? extracted.filter((f) => {
               const r = (f.provenance as { relevance?: number } | null)?.relevance;
-              return typeof r !== 'number' || r >= FACT_RELEVANCE_FLOOR; // keep if unscored or above floor
+              return typeof r !== 'number' || r >= cfg.factRelevanceFloor; // keep if unscored or above floor
             })
           : extracted;
       const fresh = filterNewFacts(relevantExtracted, seen);

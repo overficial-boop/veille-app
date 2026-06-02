@@ -3,7 +3,6 @@ import { eq, desc } from 'drizzle-orm';
 import { dossiers, facts as factsTable, dossierUpdates } from './db/schema';
 import { selectLlmClient } from '@veille/core';
 import { hostOf } from './host';
-import { classify } from './temporal';
 
 export type SourceGroup = { host: string; facts: Fact[] };
 
@@ -109,24 +108,13 @@ export function buildBriefPrompt(subject: string, language: string, groups: Sour
   ].join('\n');
 }
 
-export function buildUpdatePrompt(
-  subject: string,
-  language: string,
-  brief: string,
-  newGroups: SourceGroup[],
-  stream: 'actualite' | 'complement' = 'actualite',
-): string {
-  const framing =
-    stream === 'complement'
-      ? 'These are OLDER items newly added to the dossier — background/context discovered since last time, NOT breaking news. Summarize what context they add.'
-      : 'These are RECENT developments since the last update.';
+export function buildUpdatePrompt(subject: string, language: string, brief: string, newGroups: SourceGroup[]): string {
   return [
-    'You write a short dated "what\'s new" update to an existing dossier.',
+    'You write a short dated "what\'s new" note for an existing dossier.',
     `Subject: ${subject}`,
     `Write in: ${language}. Output Markdown prose in the "update" field.`,
-    framing,
     'Below is the EXISTING brief (context) and only the NEW facts since the last update.',
-    'Write a brief note describing what these new facts add or change relative to the brief. Attribute each claim with a Markdown link whose TEXT is the source/publication name and whose target is its EXACT URL from the [source: …] tags below — e.g. "selon [Le Monde](https://www.lemonde.fr/article-x)". Use only those URLs, never invent one. NEVER output a bare or bracketed URL like "[https://…]" — always the full [texte](url) form. If nothing material, keep it to a sentence.',
+    'Write a brief, clean note describing what these new facts add or change. Plain prose — do NOT add Markdown links, URLs, or citations (sources are shown separately). If nothing material, keep it to a sentence.',
     'For any publication host not implied by the existing brief, include it in "newSources" with a one-sentence summary.',
     'Return JSON only: { update, newSources: [{host, summary}] }.',
     '',
@@ -224,28 +212,15 @@ export async function composeDossier(
     return { wrote: 'brief' };
   }
 
-  // update — split the run's new facts into two recency streams; one row per non-empty stream.
-  const buckets: Array<[ 'actualite' | 'complement', typeof newRows ]> = [
-    ['actualite', newRows.filter((r) => classify(r, cutoff) === 'actualite')],
-    ['complement', newRows.filter((r) => classify(r, cutoff) === 'complement')],
-  ];
-  let wroteAny = false;
-  for (const [stream, rows] of buckets) {
-    if (rows.length === 0) continue;
-    onProgress({ type: 'synthesis', phase: 'update', state: 'start' });
-    const groups = groupFactsByHost(rows.map(toFact));
-    const res = await client.complete(
-      buildUpdatePrompt(subject, language, dossier.brief ?? '', groups, stream),
-      { jsonSchema: UPDATE_SCHEMA },
-    );
-    const { body, sourceNotes } = parseUpdate(res.text);
-    const allowedUrls = new Set(rows.map((r) => r.sourceUrl));
-    const safeBody = body ? stripUnknownLinks(body, allowedUrls) : body;
-    if (safeBody) {
-      await addUpdate(dossierId, safeBody, rows.length, sourceNotes, stream);
-      wroteAny = true;
-    }
-    onProgress({ type: 'synthesis', phase: 'update', state: 'done' });
-  }
-  return { wrote: wroteAny ? 'update' : 'none' };
+  // update — one clean "nouveautés" entry over the run's new facts (no recency split here;
+  // the refresh phase already constrained extraction to recent docs).
+  onProgress({ type: 'synthesis', phase: 'update', state: 'start' });
+  const groups = groupFactsByHost(newRows.map(toFact));
+  const res = await client.complete(buildUpdatePrompt(subject, language, dossier.brief ?? '', groups), { jsonSchema: UPDATE_SCHEMA });
+  const { body, sourceNotes } = parseUpdate(res.text);
+  const allowedUrls = new Set(newRows.map((r) => r.sourceUrl));
+  const safeBody = body ? stripUnknownLinks(body, allowedUrls) : body; // guard: unlink any stray hallucinated link
+  if (safeBody) await addUpdate(dossierId, safeBody, newRows.length, sourceNotes);
+  onProgress({ type: 'synthesis', phase: 'update', state: 'done' });
+  return { wrote: safeBody ? 'update' : 'none' };
 }

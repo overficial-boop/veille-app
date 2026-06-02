@@ -430,15 +430,6 @@ details[open] > summary .chev { transform: rotate(90deg); }
 /* ---------------- MISES À JOUR ---------------- */
 .journal { display: flex; flex-direction: column; }
 
-/* brief-rebuild proposal banner */
-.rebuild-proposal {
-  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
-  margin: 0 0 1.4rem; padding: .7rem 1rem;
-  background: var(--accent-soft); border: 1px solid color-mix(in oklch, var(--accent) 22%, var(--line));
-  border-radius: var(--radius-sm);
-}
-.rebuild-msg { font-size: var(--t-sm); color: var(--ink); }
-.rebuild-actions { display: inline-flex; gap: .5rem; flex: none; }
 .update { display: grid; grid-template-columns: 132px 1fr; gap: 1.4rem; padding: 1.1rem 0; border-top: 1px solid var(--line); position: relative; }
 .update:first-child { border-top: none; }
 .update .when { font-family: var(--font-mono); font-size: var(--t-mono); letter-spacing: .03em; color: var(--ink-3); padding-top: .2rem; }

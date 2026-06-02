@@ -14,7 +14,7 @@ export type DossierPlan = {
   sources: PlannedSource[];
 };
 
-export type PlanDossierInput = { intent: string; language?: string; model?: string; client?: LlmClient };
+export type PlanDossierInput = { intent: string; language?: string; model?: string; client?: LlmClient; maxQueries?: number };
 
 export class EmptyIntentError extends Error {
   constructor() {
@@ -23,7 +23,6 @@ export class EmptyIntentError extends Error {
   }
 }
 
-const MAX_TAVILY = 3;
 const URL_RE = /https?:\/\/[^\s)]+/g;
 const CHRONO_RE = /\b(chronolog\w*|timeline|affaire|frise)\b/i;
 
@@ -51,13 +50,13 @@ const SCHEMA = {
   propertyOrdering: ['subjectName', 'template', 'queries'],
 } as const;
 
-function prompt(intent: string, language: string): string {
+function prompt(intent: string, language: string, maxQueries: number): string {
   return [
     'You plan a subject-monitoring dossier from a free-form intent.',
     'Return JSON: { subjectName, template, queries[] }.',
     '- subjectName: the short canonical name of the subject (person, entity, or affair), in ' + language + '.',
     '- template: "profile" if the subject is a person/entity; "chronology" if the intent asks for a timeline/sequence of events/an affair; otherwise "feed".',
-    '- queries: up to 3 sharp Tavily web-search queries (query + one-sentence rationale; optional days, topic in news|finance|general). Decompose distinct angles; do not pad.',
+    `- queries: up to ${maxQueries} sharp Tavily web-search queries (query + one-sentence rationale; optional days, topic in news|finance|general). Decompose distinct angles; do not pad.`,
     '',
     'INTENT:',
     intent,
@@ -88,9 +87,10 @@ export async function planDossier(input: PlanDossierInput): Promise<DossierPlan>
   if (!intent) throw new EmptyIntentError();
   const client = input.client ?? selectLlmClient(process.env);
   const language = input.language ?? 'fr';
+  const maxQueries = input.maxQueries ?? 3;
   const opts: { jsonSchema: object; model?: string } = { jsonSchema: SCHEMA };
   if (input.model !== undefined) opts.model = input.model;
-  const res = await client.complete(prompt(intent, language), opts);
+  const res = await client.complete(prompt(intent, language, maxQueries), opts);
   const raw = parse(res.text);
 
   // template: model's choice, with keyword guardrail
@@ -104,7 +104,7 @@ export async function planDossier(input: PlanDossierInput): Promise<DossierPlan>
   const rawQueries = Array.isArray(raw.queries) ? raw.queries : [];
   const tavily: PlannedSource[] = rawQueries
     .filter((q: any) => q && typeof q.query === 'string' && q.query.trim())
-    .slice(0, MAX_TAVILY)
+    .slice(0, maxQueries)
     .map((q: any) => {
       const config: TavilyConfig = { query: q.query.trim() };
       if (typeof q.days === 'number' && q.days > 0) config.days = Math.floor(q.days);

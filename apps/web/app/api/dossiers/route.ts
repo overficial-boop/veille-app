@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { planDossier } from '@veille/discovery';
 import { createDossier } from '@/lib/dossiers';
+import { getRefreshConfig } from '@/lib/refresh-config';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   const intent = (body.intent ?? '').trim();
   if (!intent) return NextResponse.json({ error: 'intent required' }, { status: 400 });
   try {
-    const plan = await planDossier({ intent, language: 'fr' });
+    const plan = await planDossier({ intent, language: 'fr', maxQueries: getRefreshConfig().plannerMaxQueries });
     const { slug } = await createDossier(session.user.id, intent, plan);
     return NextResponse.json({ slug });
   } catch (e) {

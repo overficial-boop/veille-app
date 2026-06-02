@@ -4,6 +4,7 @@ import { db } from './db';
 import { documents, facts } from './db/schema';
 import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, DocKind } from './document/types';
 import { registerAllAdapters } from './adapters';
+import { attachFactCounts } from './fact-count';
 
 export async function upsertDocument(
   dossierId: string,
@@ -102,8 +103,14 @@ export async function listDocumentsByStatus(dossierId: string) {
     .from(documents)
     .where(and(eq(documents.dossierId, dossierId), ne(documents.status, 'rejected')))
     .orderBy(sql`${documents.relevance} desc nulls last`, desc(documents.createdAt));
-  const kept = rows.filter((r) => r.status === 'kept');
-  const suggestions = rows.filter((r) => r.status === 'suggestion');
+  const counts = await db
+    .select({ documentId: facts.documentId, n: sql<number>`count(*)::int` })
+    .from(facts)
+    .where(eq(facts.dossierId, dossierId))
+    .groupBy(facts.documentId);
+  const withCounts = attachFactCounts(rows, counts);
+  const kept = withCounts.filter((r) => r.status === 'kept');
+  const suggestions = withCounts.filter((r) => r.status === 'suggestion');
   return { kept, suggestions };
 }
 

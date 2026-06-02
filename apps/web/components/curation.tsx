@@ -152,6 +152,9 @@ export function KeptFeed({ slug, documents }: { slug: string; documents: Doc[] }
 
                 <div className="doc-foot">
                   <span>{formatDateFr(new Date(date))}</span>
+                  {d.factCount > 0 && (
+                    <span className="doc-facts">{d.factCount} {d.factCount === 1 ? 'fait' : 'faits'}</span>
+                  )}
                   {badges.length > 0 && (
                     <span className="doc-badges">
                       {badges.map((b) => (

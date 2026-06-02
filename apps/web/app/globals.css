@@ -563,7 +563,7 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 .fiche-check-note { font-size: var(--t-xs); color: var(--ink-2); margin: .35rem 0 0; padding: .4rem .6rem; border-left: 2px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
 /* Two-column fiche grid */
-.fiche-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(1.5rem, 3.5vw, 3.25rem); align-items: start; max-width: 1300px; margin-top: 2rem; }
+.fiche-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(1.5rem, 3.5vw, 3.25rem); align-items: start; margin-top: 2rem; }
 .fiche-main { min-width: 0; }
 .fiche-side { min-width: 0; position: sticky; top: 72px; }
 .fiche-grid .section { max-width: none; }

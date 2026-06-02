@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { getSession } from '@/lib/session';
 import { getDossier } from '@/lib/dossiers';
 import { getDocument, listFactsForDocument } from '@/lib/documents';
+import { hostOf } from '@/lib/host';
 import { formatDateFr } from '@/components/templates/types';
 import { TopBar } from '@/components/topbar';
 import { DocumentFiche } from '@/components/document-fiche';
@@ -42,6 +43,10 @@ export default async function DocumentPage({
 
   const displayDate = publishedAt ?? createdAt;
 
+  // "Where this article comes from" — the publication summary the brief generates, shown on the
+  // document it belongs to (keyed by host).
+  const sourceNote = dossier.sourceNotes?.[hostOf(doc.url)] ?? null;
+
   return (
     <div className="shell">
       <TopBar email={session.user.email} />
@@ -70,6 +75,22 @@ export default async function DocumentPage({
               <ExternalLink style={{ width: 12, height: 12 }} />
             </a>
           </div>
+          {sourceNote && (
+            <p
+              className="rise"
+              style={{
+                marginTop: '.9rem',
+                fontFamily: 'var(--font-serif)',
+                fontStyle: 'italic',
+                color: 'var(--ink-2)',
+                fontSize: '1.02rem',
+                lineHeight: 1.5,
+                maxWidth: '60ch',
+              }}
+            >
+              {sourceNote}
+            </p>
+          )}
         </header>
 
         <DocumentFiche

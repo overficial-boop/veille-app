@@ -3,7 +3,7 @@ import { uuidv7, slugify } from '@veille/core';
 import type { Fact } from '@veille/core';
 import type { DossierPlan } from '@veille/discovery';
 import { db } from './db';
-import { dossiers, sources, facts, dossierUpdates } from './db/schema';
+import { dossiers, sources, facts } from './db/schema';
 import { factToRow } from './facts-map';
 import { sourceTargetField, type SourceInput } from './source-input';
 export async function listDossiers(ownerId: string) {
@@ -146,30 +146,9 @@ export async function updateSource(
   await db.update(sources).set(set).where(and(eq(sources.id, sourceId), eq(sources.dossierId, dossier.id)));
 }
 
-/** Returns all updates for a dossier, newest first. */
-export async function listUpdates(dossierId: string) {
-  return db.select().from(dossierUpdates).where(eq(dossierUpdates.dossierId, dossierId)).orderBy(desc(dossierUpdates.createdAt));
-}
-
-/** Replaces the brief + source_notes wholesale (on-demand brief regeneration). Not a merge — see addUpdate. */
+/** Replaces the brief + source_notes wholesale (on-demand brief regeneration). */
 export async function setBrief(dossierId: string, brief: string, sourceNotes: Record<string, string>) {
   await db.update(dossiers).set({ brief, sourceNotes, briefGeneratedAt: new Date() }).where(eq(dossiers.id, dossierId));
 }
 
-/** Appends an update entry and merges newSourceNotes into dossiers.source_notes atomically. */
-export async function addUpdate(
-  dossierId: string,
-  body: string,
-  factCount: number,
-  newSourceNotes: Record<string, string>,
-) {
-  await db.transaction(async (tx) => {
-    await tx.insert(dossierUpdates).values({ id: uuidv7(), dossierId, body, factCount });
-    if (Object.keys(newSourceNotes).length > 0) {
-      const [d] = await tx.select({ notes: dossiers.sourceNotes }).from(dossiers).where(eq(dossiers.id, dossierId));
-      const merged = { ...(d?.notes ?? {}), ...newSourceNotes };
-      await tx.update(dossiers).set({ sourceNotes: merged }).where(eq(dossiers.id, dossierId));
-    }
-  });
-}
 

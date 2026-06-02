@@ -71,15 +71,11 @@ function RelevancePill({ relevance, reason }: { relevance: number | null; reason
  */
 export function KeptFeed({ slug, documents }: { slug: string; documents: Doc[] }) {
   const [isPending, startTransition] = React.useTransition();
-  const [busyId, setBusyId] = React.useState<string | null>(null);
-
-  React.useEffect(() => { if (!isPending) setBusyId(null); }, [isPending]);
 
   function reject(e: React.MouseEvent, docId: string) {
     e.preventDefault();
     e.stopPropagation();
     if (isPending) return;
-    setBusyId(docId);
     startTransition(() => {
       setDocumentStatus(slug, docId, 'rejected');
     });

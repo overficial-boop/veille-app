@@ -693,7 +693,7 @@ function AddSourceDialog({
       <div className="dialog" role="dialog" aria-modal="true" aria-label="Ajouter une source">
         <h3>Ajouter une source</h3>
         <div className="d-sub">
-          Lancez un rafraîchissement pour extraire les faits de la nouvelle source.
+          Lancez un rafraîchissement pour analyser la nouvelle source.
         </div>
         <form onSubmit={onSubmit}>
           <div className="type-grid" role="group" aria-label="Type de source">

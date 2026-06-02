@@ -1,6 +1,6 @@
 import type { Fact } from '@veille/core';
-import { eq, desc, and, inArray } from 'drizzle-orm';
-import { dossiers, facts as factsTable, dossierUpdates, documents as documentsTable } from './db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
+import { dossiers, facts as factsTable, documents as documentsTable } from './db/schema';
 import { selectLlmClient } from '@veille/core';
 import { hostOf } from './host';
 
@@ -18,13 +18,7 @@ export function groupFactsByHost(facts: Fact[]): SourceGroup[] {
   return [...map.entries()].map(([host, facts]) => ({ host, facts }));
 }
 
-export type ComposeKind = 'none' | 'brief' | 'update';
-export function decideCompose(s: { hasFacts: boolean; hasBrief: boolean; hasNewFacts: boolean }): ComposeKind {
-  if (!s.hasFacts) return 'none';
-  if (!s.hasBrief) return 'brief';
-  if (s.hasNewFacts) return 'update';
-  return 'none';
-}
+export type ComposeKind = 'none' | 'brief';
 
 function parseJson(text: string): Record<string, unknown> {
   try { return JSON.parse(text.trim()); } catch {
@@ -45,11 +39,6 @@ export function parseBrief(text: string): { brief: string; sourceNotes: Record<s
   const raw = parseJson(text);
   return { brief: typeof raw.brief === 'string' ? raw.brief : '', sourceNotes: notesFrom(raw.sources) };
 }
-export function parseUpdate(text: string): { body: string; sourceNotes: Record<string, string> } {
-  const raw = parseJson(text);
-  return { body: typeof raw.update === 'string' ? raw.update : '', sourceNotes: notesFrom(raw.newSources) };
-}
-
 /** Serialize grouped facts for a synthesis prompt. */
 export function renderGroups(groups: SourceGroup[]): string {
   return groups.map((g) =>
@@ -80,18 +69,7 @@ const BRIEF_SCHEMA = {
   required: ['brief', 'sources'], propertyOrdering: ['brief', 'sources'],
 } as const;
 
-const UPDATE_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    update: { type: 'STRING' },
-    newSources: { type: 'ARRAY', items: { type: 'OBJECT',
-      properties: { host: { type: 'STRING' }, summary: { type: 'STRING' } },
-      required: ['host', 'summary'], propertyOrdering: ['host', 'summary'] } },
-  },
-  required: ['update'], propertyOrdering: ['update', 'newSources'],
-} as const;
-
-export { BRIEF_SCHEMA, UPDATE_SCHEMA };
+export { BRIEF_SCHEMA };
 
 export function buildBriefPrompt(subject: string, language: string, groups: SourceGroup[]): string {
   return [
@@ -105,23 +83,6 @@ export function buildBriefPrompt(subject: string, language: string, groups: Sour
     '',
     'FACTS BY PUBLICATION:',
     renderGroups(groups),
-  ].join('\n');
-}
-
-export function buildUpdatePrompt(subject: string, language: string, brief: string, newGroups: SourceGroup[]): string {
-  return [
-    'You write a short dated "what\'s new" note for an existing dossier.',
-    `Subject: ${subject}`,
-    `Write in: ${language}. Output Markdown prose in the "update" field.`,
-    'Below is the EXISTING brief (context) and only the NEW facts since the last update.',
-    'Write a brief, clean note describing what these new facts add or change. Plain prose — do NOT add Markdown links, URLs, or citations (sources are shown separately). If nothing material, keep it to a sentence.',
-    'For any publication host not implied by the existing brief, include it in "newSources" with a one-sentence summary.',
-    'Return JSON only: { update, newSources: [{host, summary}] }.',
-    '',
-    'EXISTING BRIEF:', brief || '(none)',
-    '',
-    'NEW FACTS BY PUBLICATION:',
-    renderGroups(newGroups),
   ].join('\n');
 }
 
@@ -148,22 +109,9 @@ function toFact(row: typeof factsTable.$inferSelect): Fact {
   };
 }
 
-/** Returns the cutoff time for "new" facts in an update: latest update, else brief time. */
-async function newFactsCutoff(dossierId: string, briefGeneratedAt: Date | null): Promise<Date | null> {
-  // lazy: ./db eagerly validates env at module load — keep this module's pure helpers test-loadable
-  const { db } = await import('./db');
-  const [u] = await db
-    .select({ at: dossierUpdates.createdAt })
-    .from(dossierUpdates)
-    .where(eq(dossierUpdates.dossierId, dossierId))
-    .orderBy(desc(dossierUpdates.createdAt))
-    .limit(1);
-  return u?.at ?? briefGeneratedAt ?? null;
-}
-
 export async function composeDossier(
   dossierId: string,
-  opts: { mode: 'auto' | 'brief'; language?: string; scope?: string[]; onProgress?: (p: SynthesisProgress) => void } = { mode: 'auto' },
+  opts: { mode: 'brief'; language?: string; scope?: string[]; onProgress?: (p: SynthesisProgress) => void } = { mode: 'brief' },
 ): Promise<{ wrote: ComposeKind }> {
   const onProgress = opts.onProgress ?? (() => {});
 
@@ -231,49 +179,6 @@ export async function composeDossier(
     return { wrote: 'brief' };
   }
 
-  const allRows = await db.select().from(factsTable).where(eq(factsTable.dossierId, dossierId));
-  const hasFacts = allRows.length > 0;
-  const briefExists = !!dossier.brief;
-  // In 'auto' mode we do not force regeneration.
-  const hasBrief = briefExists;
-
-  const cutoff = await newFactsCutoff(dossierId, dossier.briefGeneratedAt ?? null);
-  const newRows = cutoff ? allRows.filter((r) => r.createdAt > cutoff) : allRows;
-  const hasNewFacts = newRows.length > 0;
-
-  const kind = decideCompose({ hasFacts, hasBrief, hasNewFacts });
-
-  if (kind === 'none') {
-    onProgress({ type: 'synthesis', phase: briefExists ? 'update' : 'brief', state: 'skip' });
-    return { wrote: 'none' };
-  }
-
-  const { setBrief, addUpdate } = await import('./dossiers');
-
-  const client = selectLlmClient(process.env as Record<string, string | undefined>);
-  const subject = [dossier.name, dossier.intent].filter(Boolean).join(' — ');
-
-  if (kind === 'brief') {
-    onProgress({ type: 'synthesis', phase: 'brief', state: 'start' });
-    const groups = groupFactsByHost(allRows.map(toFact));
-    const res = await client.complete(buildBriefPrompt(subject, language, groups), { jsonSchema: BRIEF_SCHEMA });
-    const { brief, sourceNotes } = parseBrief(res.text);
-    const allowedUrls = new Set(allRows.map((r) => r.sourceUrl));
-    const safeBrief = brief ? stripUnknownLinks(brief, allowedUrls) : brief;
-    if (safeBrief) await setBrief(dossierId, safeBrief, sourceNotes);
-    onProgress({ type: 'synthesis', phase: 'brief', state: 'done' });
-    return { wrote: 'brief' };
-  }
-
-  // update — one clean "nouveautés" entry over the run's new facts (no recency split here;
-  // the refresh phase already constrained extraction to recent docs).
-  onProgress({ type: 'synthesis', phase: 'update', state: 'start' });
-  const groups = groupFactsByHost(newRows.map(toFact));
-  const res = await client.complete(buildUpdatePrompt(subject, language, dossier.brief ?? '', groups), { jsonSchema: UPDATE_SCHEMA });
-  const { body, sourceNotes } = parseUpdate(res.text);
-  const allowedUrls = new Set(newRows.map((r) => r.sourceUrl));
-  const safeBody = body ? stripUnknownLinks(body, allowedUrls) : body; // guard: unlink any stray hallucinated link
-  if (safeBody) await addUpdate(dossierId, safeBody, newRows.length, sourceNotes);
-  onProgress({ type: 'synthesis', phase: 'update', state: 'done' });
-  return { wrote: safeBody ? 'update' : 'none' };
+  // mode !== 'brief' — currently unreachable; brief is the only supported mode.
+  return { wrote: 'none' };
 }

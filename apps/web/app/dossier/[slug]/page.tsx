@@ -2,11 +2,10 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/session';
-import { getDossier, listSources, listFacts, listUpdates } from '@/lib/dossiers';
+import { getDossier, listSources, listFacts } from '@/lib/dossiers';
 import { listDocumentsByStatus } from '@/lib/documents';
 import { formatDateFr } from '@/components/templates/types';
 import { Brief } from '@/components/brief';
-import { Journal } from '@/components/journal';
 import { CitationsProvider } from '@/components/citations-context';
 import { DossierRuntime } from '@/components/dossier-runtime';
 import { KeptFeed, SuggestionsTray, GenerateBriefCta } from '@/components/curation';
@@ -33,10 +32,9 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
   if (!session) redirect('/sign-in');
   const dossier = await getDossier(session.user.id, slug);
   if (!dossier) notFound();
-  const [sources, facts, updates, { kept, suggestions }] = await Promise.all([
+  const [sources, facts, { kept, suggestions }] = await Promise.all([
     listSources(dossier.id),
     listFacts(dossier.id),
-    listUpdates(dossier.id),
     listDocumentsByStatus(dossier.id),
   ]);
   const factUrls = facts.map((f) => f.sourceUrl);
@@ -108,14 +106,6 @@ export default async function DossierPage({ params }: { params: Promise<{ slug: 
             {/* Suggestions — lower-confidence candidates to triage (hidden if none) */}
             <SuggestionsTray slug={dossier.slug} documents={suggestions} />
 
-            {/* Journal — dated "what's new" notes, newest first */}
-            <Journal
-              entries={updates.map((u) => ({
-                id: u.id,
-                when: formatDateFr(new Date(u.createdAt)),
-                body: u.body,
-              }))}
-            />
           </main>
         </div>
       </div>

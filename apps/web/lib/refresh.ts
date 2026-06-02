@@ -165,3 +165,45 @@ export async function refreshDossier(
   onProgress({ type: 'done', total: kept + suggested });
   return { kept, suggested, total: kept + suggested };
 }
+
+/** One-off ad-hoc pull (mode recherche): runs the curate pipeline over a single Tavily query and
+ *  lands documents in the feed/suggestions by the usual relevance floor. Creates NO source and does
+ *  NOT advance refreshedAt — it only grows the curated set. Dedups against existing document URLs. */
+export async function pullAdHoc(
+  dossierId: string,
+  query: string,
+  opts: { language?: string } = {},
+): Promise<{ kept: number; suggested: number; total: number }> {
+  registerAllAdapters();
+  const q = query.trim();
+  if (!q) return { kept: 0, suggested: 0, total: 0 };
+  const cfg = getRefreshConfig();
+  const lang = opts.language ?? 'fr';
+
+  const [dossier] = await db.select().from(dossiers).where(eq(dossiers.id, dossierId));
+  if (!dossier) return { kept: 0, suggested: 0, total: 0 };
+  const subjectHint = [dossier.name, dossier.intent].filter(Boolean).join(' — ');
+  const ctx: PullCtx = { dossierId, intent: subjectHint || dossier.intent || '', language: lang, cfg };
+
+  const existingDocs = await db.select({ url: documents.url }).from(documents).where(eq(documents.dossierId, dossierId));
+  const seenUrls = new Set(existingDocs.map((d) => d.url));
+
+  const cands = (await discoverTavily({ query: q })).filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
+  const ranked = [...cands]
+    .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, cfg.assembleCandidatesPerSource);
+
+  let kept = 0;
+  let suggested = 0;
+  for (const c of freshCandidates(ranked, seenUrls)) {
+    if (!findAdapter({ kind: 'url', url: c.url })) continue;
+    try {
+      const status = await processCandidate(ctx, c.url, c.publishedAt, c.title);
+      if (status === 'kept') kept++; else suggested++;
+    } catch {
+      /* skip a bad candidate URL, keep going */
+    }
+  }
+  return { kept, suggested, total: kept + suggested };
+}

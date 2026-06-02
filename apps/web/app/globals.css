@@ -58,7 +58,7 @@
   --radius-sm: 0.45rem;
   --radius-lg: 1.1rem;
   --rail-w:    320px;
-  --read-w:    720px;
+  --read-w:    860px;
 
   --ease: cubic-bezier(.22, .68, .36, 1);
 
@@ -273,10 +273,13 @@ textarea.field { resize: none; line-height: 1.55; }
 [data-theme="dark"] .signin-msg.ok { color: oklch(0.78 0.13 150); }
 
 /* ---------------- PAGE WIDTH ---------------- */
-.page { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 clamp(1rem, 4vw, 2.5rem); }
+/* Full-bleed: content uses the whole viewport width (edge-to-edge, with comfortable side
+   padding). Prose blocks stay legible via their own --read-w cap; only the outer page is uncapped. */
+.page { width: 100%; max-width: none; margin: 0; padding: 0 clamp(1rem, 4vw, 2.5rem); }
 
 /* ---------------- HOME ---------------- */
-.home { padding: clamp(2rem, 6vh, 4rem) 0 5rem; }
+/* vertical only — keep the horizontal gutter from .page (this div is `page home`) */
+.home { padding-block: clamp(2rem, 6vh, 4rem) 5rem; }
 .home-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem 2rem; flex-wrap: wrap; }
 .home-head > div:first-child { flex: 1 1 420px; min-width: 0; }
 .home-head .meta { flex: 0 0 auto; }
@@ -284,7 +287,7 @@ textarea.field { resize: none; line-height: 1.55; }
 .home-head .meta { font-size: var(--t-sm); color: var(--ink-2); margin-top: .3rem; }
 .home-head .meta b { color: var(--ink); font-weight: 600; }
 
-.compose { margin-top: 2.2rem; border-radius: var(--radius-lg); overflow: hidden; position: relative; }
+.compose { margin-top: 2.2rem; max-width: 760px; border-radius: var(--radius-lg); overflow: hidden; position: relative; }
 .compose::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(150deg, color-mix(in oklch, var(--accent) 40%, transparent), transparent 45%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
 .compose-inner { padding: 1.5rem 1.5rem 1.1rem; }
 .compose-label { display: flex; align-items: center; gap: .55rem; font-family: var(--font-serif); font-size: var(--t-h3); color: var(--ink); margin-bottom: .15rem; }

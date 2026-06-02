@@ -6,7 +6,7 @@ import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, DocK
 
 export async function upsertDocument(
   dossierId: string,
-  m: { url: string; title?: string; siteName?: string; kind: DocKind; publishedAt?: Date | null; content?: string | null },
+  m: { url: string; title?: string; siteName?: string; kind: DocKind; publishedAt?: Date | null; content?: string | null; status?: 'kept' | 'suggestion' | 'rejected'; relevance?: number | null; relevanceReason?: string | null },
 ): Promise<{ id: string; needsCore: boolean }> {
   const [existing] = await db
     .select({ id: documents.id, review: documents.review })
@@ -22,6 +22,10 @@ export async function upsertDocument(
         publishedAt: m.publishedAt ?? null,
         // only overwrite stored content when fresh content was captured (don't clobber on a contentless call)
         ...(m.content != null ? { content: m.content } : {}),
+        // only overwrite status/relevance when provided
+        ...(m.status != null ? { status: m.status } : {}),
+        ...(m.relevance != null ? { relevance: m.relevance } : {}),
+        ...(m.relevanceReason != null ? { relevanceReason: m.relevanceReason } : {}),
       })
       .where(eq(documents.id, existing.id));
     return { id: existing.id, needsCore: existing.review == null };
@@ -36,6 +40,9 @@ export async function upsertDocument(
     kind: m.kind,
     publishedAt: m.publishedAt ?? null,
     content: m.content ?? null,
+    status: m.status ?? 'kept',
+    relevance: m.relevance ?? null,
+    relevanceReason: m.relevanceReason ?? null,
   });
   return { id, needsCore: true };
 }

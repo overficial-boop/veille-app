@@ -18,7 +18,10 @@ const DEFAULTS: RefreshConfig = {
   maxFactsPerUrl: 20,
 };
 
-/** Positive finite number from an env string, else the default. */
+/** Positive finite number from an env string, else the default. Fractional values pass
+ *  through unchanged: the floors (candidateScoreFloor/factRelevanceFloor) are meant to be
+ *  fractional, and the count knobs are only ever used as slice/loop bounds, which JS
+ *  truncates safely — so no rounding is applied here. */
 function num(v: string | undefined, d: number): number {
   const n = v === undefined ? NaN : Number(v);
   return Number.isFinite(n) && n > 0 ? n : d;

@@ -14,5 +14,6 @@ describe('resolveRefreshConfig', () => {
   it('ignores invalid/zero/negative overrides → default', () => {
     expect(resolveRefreshConfig({ VEILLE_PLANNER_MAX_QUERIES: 'abc' }).plannerMaxQueries).toBe(5);
     expect(resolveRefreshConfig({ VEILLE_REFRESH_CANDIDATES: '0' }).refreshCandidatesPerSource).toBe(6);
+    expect(resolveRefreshConfig({ VEILLE_MAX_FACTS_PER_URL: '-1' }).maxFactsPerUrl).toBe(20);
   });
 });

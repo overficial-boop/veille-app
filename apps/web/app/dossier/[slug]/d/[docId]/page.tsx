@@ -85,6 +85,7 @@ export default async function DocumentPage({
             elaboration: doc.elaboration as import('@/lib/document/types').ElaborationBlock | null,
             factChecks: doc.factChecks as import('@/lib/document/types').FactChecksBlock | null,
           }}
+          canAnalyze={doc.content != null}
           facts={facts}
           slug={slug}
         />

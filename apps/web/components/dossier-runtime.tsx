@@ -172,7 +172,10 @@ export function DossierRuntime({ slug, status, sources }: Props) {
         } else if (p.type === 'facts') {
           setTotal(p.total);
           setLines((prev) => {
-            const idx = prev.findIndex((l) => l.label === p.sourceLabel && l.state === 'pending');
+            // Match by label regardless of state: the engine emits `facts` repeatedly per source
+            // (once per candidate, climbing `added`), so update the existing row in place rather
+            // than appending — otherwise each update would spawn a duplicate line.
+            const idx = prev.findIndex((l) => l.label === p.sourceLabel);
             if (idx === -1) {
               return [...prev, { label: p.sourceLabel, state: 'added', added: p.added }];
             }

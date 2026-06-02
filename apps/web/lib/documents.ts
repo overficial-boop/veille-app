@@ -6,7 +6,7 @@ import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, DocK
 
 export async function upsertDocument(
   dossierId: string,
-  m: { url: string; title?: string; siteName?: string; kind: DocKind; publishedAt?: Date | null },
+  m: { url: string; title?: string; siteName?: string; kind: DocKind; publishedAt?: Date | null; content?: string | null },
 ): Promise<{ id: string; needsCore: boolean }> {
   const [existing] = await db
     .select({ id: documents.id, review: documents.review })
@@ -15,7 +15,14 @@ export async function upsertDocument(
   if (existing) {
     await db
       .update(documents)
-      .set({ title: m.title, siteName: m.siteName, kind: m.kind, publishedAt: m.publishedAt ?? null })
+      .set({
+        title: m.title,
+        siteName: m.siteName,
+        kind: m.kind,
+        publishedAt: m.publishedAt ?? null,
+        // only overwrite stored content when fresh content was captured (don't clobber on a contentless call)
+        ...(m.content != null ? { content: m.content } : {}),
+      })
       .where(eq(documents.id, existing.id));
     return { id: existing.id, needsCore: existing.review == null };
   }
@@ -28,6 +35,7 @@ export async function upsertDocument(
     siteName: m.siteName,
     kind: m.kind,
     publishedAt: m.publishedAt ?? null,
+    content: m.content ?? null,
   });
   return { id, needsCore: true };
 }

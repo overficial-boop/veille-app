@@ -1,5 +1,5 @@
 import { uuidv7, extractInput } from '@veille/core';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, ne, desc, sql } from 'drizzle-orm';
 import { db } from './db';
 import { documents, facts } from './db/schema';
 import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, DocKind } from './document/types';
@@ -97,6 +97,38 @@ export async function getDocument(dossierId: string, id: string) {
     .from(documents)
     .where(and(eq(documents.id, id), eq(documents.dossierId, dossierId)));
   return d ?? null;
+}
+
+export type Doc = Awaited<ReturnType<typeof listDocuments>>[number];
+
+/**
+ * The curated split for the workspace: every non-rejected document, partitioned by status.
+ * Kept docs lead with the most relevant (relevance desc, NULLs last) then most recent;
+ * suggestions order by relevance desc so the strongest candidates surface first.
+ */
+export async function listDocumentsByStatus(
+  dossierId: string,
+): Promise<{ kept: Doc[]; suggestions: Doc[] }> {
+  const rows = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.dossierId, dossierId), ne(documents.status, 'rejected')))
+    .orderBy(sql`${documents.relevance} desc nulls last`, desc(documents.createdAt));
+  const kept = rows.filter((r) => r.status === 'kept');
+  const suggestions = rows.filter((r) => r.status === 'suggestion');
+  return { kept, suggestions };
+}
+
+/** Set a document's curation status (kept | suggestion | rejected). */
+export async function setDocumentStatus(
+  dossierId: string,
+  docId: string,
+  status: 'kept' | 'suggestion' | 'rejected',
+) {
+  await db
+    .update(documents)
+    .set({ status })
+    .where(and(eq(documents.id, docId), eq(documents.dossierId, dossierId)));
 }
 
 export async function listFactsForDocument(documentId: string) {

@@ -92,6 +92,7 @@ export function buildBriefPrompt(subject: string, language: string, groups: Sour
 
 export type SynthesisProgress =
   | { type: 'synthesis'; phase: 'brief' | 'update'; state: 'start' | 'done' | 'skip' }
+  | { type: 'brief-doc'; index: number; total: number; title: string }
   | { type: 'synthesis-error'; message: string };
 
 // jsonb columns (provenance, extractedBy) are typed `unknown` by Drizzle; cast back to the Fact shape the insert path guarantees.
@@ -125,23 +126,27 @@ export async function composeDossier(
 
   // In brief mode: determine target documents (scope or all kept), ensure facts exist for each.
   if (opts.mode === 'brief') {
-    let targetDocs: { id: string; url: string; title: string | null; content: string | null }[];
+    let targetDocs: { id: string; url: string; title: string | null; content: string | null; siteName: string | null; review: unknown }[];
     if (opts.scope && opts.scope.length > 0) {
       targetDocs = await db
-        .select({ id: documentsTable.id, url: documentsTable.url, title: documentsTable.title, content: documentsTable.content })
+        .select({ id: documentsTable.id, url: documentsTable.url, title: documentsTable.title, content: documentsTable.content, siteName: documentsTable.siteName, review: documentsTable.review })
         .from(documentsTable)
         .where(and(eq(documentsTable.dossierId, dossierId), inArray(documentsTable.id, opts.scope)));
     } else {
       targetDocs = await db
-        .select({ id: documentsTable.id, url: documentsTable.url, title: documentsTable.title, content: documentsTable.content })
+        .select({ id: documentsTable.id, url: documentsTable.url, title: documentsTable.title, content: documentsTable.content, siteName: documentsTable.siteName, review: documentsTable.review })
         .from(documentsTable)
         .where(and(eq(documentsTable.dossierId, dossierId), eq(documentsTable.status, 'kept')));
     }
 
     // Idempotently ensure facts for each target document that has none yet.
     if (targetDocs.length > 0) {
-      const { extractFactsForDocument } = await import('./documents');
+      const { extractFactsForDocument, ensureDocumentCore } = await import('./documents');
+      let i = 0;
       for (const doc of targetDocs) {
+        i += 1;
+        onProgress({ type: 'brief-doc', index: i, total: targetDocs.length, title: doc.title ?? doc.url });
+        await ensureDocumentCore({ id: dossier.id, language: dossier.language ?? null }, doc);
         await extractFactsForDocument(dossier, doc);
       }
     }

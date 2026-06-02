@@ -184,212 +184,218 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
   }
 
   return (
-    <div style={{ marginTop: '2rem' }}>
+    <div className="fiche-grid">
 
-      {/* Résumé court */}
-      {shortSummary && (
-        <p className="fiche-lead">{shortSummary}</p>
-      )}
+      {/* ── Main column: résumé + review + en bref ── */}
+      <div className="fiche-main">
 
-      {/* Review */}
-      <section className="section" style={{ marginTop: '2rem' }}>
-        <div className="section-head">
-          <div className="ttl">
-            <Eyebrow>Analyse</Eyebrow>
-            <h2 style={{ marginTop: '.1rem' }}>Review</h2>
-          </div>
-        </div>
-        {review ? (
-          <>
-            <Prose>{review.markdown}</Prose>
-            <CostLine cost={review.cost} />
-          </>
-        ) : analyzing ? (
-          <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
-            Analyse en cours…
-          </p>
-        ) : analyzeError ? (
-          <div>
-            <p style={{ fontStyle: 'italic', color: 'var(--danger)', fontSize: '1rem', marginBottom: '.5rem' }}>
-              Analyse indisponible — {analyzeError}
-            </p>
-            <Btn variant="soft" size="sm" onClick={handleAnalyze} disabled={analyzing}>
-              Réessayer
-            </Btn>
-          </div>
-        ) : canAnalyze ? (
-          <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
-            Analyse en attente…
-          </p>
-        ) : (
-          <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
-            Analyse indisponible (contenu non conservé).
-          </p>
+        {/* Résumé court */}
+        {shortSummary && (
+          <p className="fiche-lead">{shortSummary}</p>
         )}
-      </section>
 
-      {/* Résumé en puces */}
-      {bullets && (
+        {/* Review */}
         <section className="section" style={{ marginTop: '2rem' }}>
           <div className="section-head">
             <div className="ttl">
-              <Eyebrow>Résumé</Eyebrow>
-              <h2 style={{ marginTop: '.1rem' }}>En bref</h2>
+              <Eyebrow>Analyse</Eyebrow>
+              <h2 style={{ marginTop: '.1rem' }}>Review</h2>
             </div>
           </div>
-          <Prose>{bullets.markdown}</Prose>
-          <CostLine cost={bullets.cost} />
-        </section>
-      )}
-
-      {/* Aller plus loin */}
-      <section className="section" style={{ marginTop: '2rem' }}>
-        <div className="section-head">
-          <div className="ttl">
-            <Eyebrow>Approfondissement</Eyebrow>
-            <h2 style={{ marginTop: '.1rem' }}>Aller plus loin</h2>
-          </div>
-        </div>
-
-        {elaboration ? (
-          <>
-            <div className="fiche-topics">
-              {elaboration.topics.map((topic) => (
-                <div key={topic.name} className="fiche-topic">
-                  <strong>{topic.name}</strong>
-                  <p style={{ color: 'var(--ink-2)', fontSize: 'var(--t-sm)', marginTop: '.3rem', lineHeight: 1.55 }}>
-                    {topic.summary}
-                  </p>
-                  {topic.resources && topic.resources.length > 0 && (
-                    <div className="fiche-chips">
-                      {topic.resources.map((r, i) => (
-                        <span key={i} className="chip">
-                          {r.kind ? `[${r.kind}] ` : ''}{r.name}{r.note ? ` — ${r.note}` : ''}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {topic.links && topic.links.length > 0 && (
-                    <div className="fiche-links">
-                      {topic.links.map((l, i) => (
-                        <a
-                          key={i}
-                          href={l.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="fiche-link"
-                        >
-                          {l.title}
-                          {l.siteName && <span style={{ color: 'var(--ink-3)', marginLeft: '.4em' }}>({l.siteName})</span>}
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <CostLine cost={elaboration.cost} />
-          </>
-        ) : (
-          <div className="fiche-generate">
-            <label className="fiche-toggle">
-              <input
-                type="checkbox"
-                checked={withTavily}
-                onChange={(e) => setWithTavily(e.target.checked)}
-                disabled={elaborating}
-              />
-              <span>avec recherche web</span>
-            </label>
-            <Btn
-              variant="soft"
-              onClick={handleElaborate}
-              disabled={elaborating}
-            >
-              {elaborating ? 'Génération…' : 'Générer (aller plus loin)'}
-            </Btn>
-            {elaborateError && (
-              <p style={{ color: 'var(--danger)', fontSize: 'var(--t-sm)', marginTop: '.5rem' }}>
-                {elaborateError}
+          {review ? (
+            <>
+              <Prose>{review.markdown}</Prose>
+              <CostLine cost={review.cost} />
+            </>
+          ) : analyzing ? (
+            <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
+              Analyse en cours…
+            </p>
+          ) : analyzeError ? (
+            <div>
+              <p style={{ fontStyle: 'italic', color: 'var(--danger)', fontSize: '1rem', marginBottom: '.5rem' }}>
+                Analyse indisponible — {analyzeError}
               </p>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* Faits */}
-      <section className="section" style={{ marginTop: '2rem' }}>
-        <div className="section-head">
-          <div className="ttl">
-            <Eyebrow>Preuve</Eyebrow>
-            <h2 style={{ marginTop: '.1rem' }}>
-              Faits sourcés
-              {extractingFacts && (
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--t-mono)', color: 'var(--ink-3)', marginLeft: '.75rem', fontWeight: 400 }}>
-                  Extraction des faits…
-                </span>
-              )}
-            </h2>
-          </div>
-          {facts.length > 0 && !factChecks && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.4rem' }}>
-              <Btn
-                variant="ghost"
-                size="sm"
-                onClick={handleFactCheck}
-                disabled={factChecking}
-              >
-                {factChecking ? 'Vérification…' : 'Vérifier les faits'}
+              <Btn variant="soft" size="sm" onClick={handleAnalyze} disabled={analyzing}>
+                Réessayer
               </Btn>
-              {factCheckError && (
-                <p style={{ color: 'var(--danger)', fontSize: 'var(--t-xs)' }}>
-                  {factCheckError}
+            </div>
+          ) : canAnalyze ? (
+            <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
+              Analyse en attente…
+            </p>
+          ) : (
+            <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-3)', fontSize: '1.05rem' }}>
+              Analyse indisponible (contenu non conservé).
+            </p>
+          )}
+        </section>
+
+        {/* Résumé en puces */}
+        {bullets && (
+          <section className="section" style={{ marginTop: '2rem' }}>
+            <div className="section-head">
+              <div className="ttl">
+                <Eyebrow>Résumé</Eyebrow>
+                <h2 style={{ marginTop: '.1rem' }}>En bref</h2>
+              </div>
+            </div>
+            <Prose>{bullets.markdown}</Prose>
+            <CostLine cost={bullets.cost} />
+          </section>
+        )}
+
+      </div>
+
+      {/* ── Side column: aller plus loin + faits ── */}
+      <div className="fiche-side">
+
+        {/* Aller plus loin */}
+        <section className="section" style={{ marginTop: '2rem' }}>
+          <div className="section-head">
+            <div className="ttl">
+              <Eyebrow>Approfondissement</Eyebrow>
+              <h2 style={{ marginTop: '.1rem' }}>Aller plus loin</h2>
+            </div>
+          </div>
+
+          {elaboration ? (
+            <>
+              <div className="fiche-topics">
+                {elaboration.topics.map((topic) => (
+                  <div key={topic.name} className="fiche-topic">
+                    <strong>{topic.name}</strong>
+                    <p style={{ color: 'var(--ink-2)', fontSize: 'var(--t-sm)', marginTop: '.3rem', lineHeight: 1.55 }}>
+                      {topic.summary}
+                    </p>
+                    {topic.resources && topic.resources.length > 0 && (
+                      <div className="fiche-chips">
+                        {topic.resources.map((r, i) => (
+                          <span key={i} className="chip">
+                            {r.kind ? `[${r.kind}] ` : ''}{r.name}{r.note ? ` — ${r.note}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {topic.links && topic.links.length > 0 && (
+                      <div className="fiche-links">
+                        {topic.links.map((l, i) => (
+                          <a
+                            key={i}
+                            href={l.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="fiche-link"
+                          >
+                            {l.title}
+                            {l.siteName && <span style={{ color: 'var(--ink-3)', marginLeft: '.4em' }}>({l.siteName})</span>}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <CostLine cost={elaboration.cost} />
+            </>
+          ) : (
+            <div className="fiche-generate">
+              <label className="fiche-toggle">
+                <input
+                  type="checkbox"
+                  checked={withTavily}
+                  onChange={(e) => setWithTavily(e.target.checked)}
+                  disabled={elaborating}
+                />
+                <span>avec recherche web</span>
+              </label>
+              <Btn
+                variant="soft"
+                onClick={handleElaborate}
+                disabled={elaborating}
+              >
+                {elaborating ? 'Génération…' : 'Générer (aller plus loin)'}
+              </Btn>
+              {elaborateError && (
+                <p style={{ color: 'var(--danger)', fontSize: 'var(--t-sm)', marginTop: '.5rem' }}>
+                  {elaborateError}
                 </p>
               )}
             </div>
           )}
-        </div>
+        </section>
 
-        {facts.length === 0 ? (
-          <p style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
-            Aucun fait extrait pour ce document.
-          </p>
-        ) : (
-          <>
-            {factChecks && (
-              <>
-                <div style={{ marginBottom: '.5rem' }}>
-                  <CostLine cost={factChecks.cost} />
-                </div>
-              </>
-            )}
-            <div className="fiche-facts">
-              {facts.map((f) => {
-                const check = factChecks?.checks.find((c) => c.factId === f.id);
-                return (
-                  <div key={f.id} className="fact" style={{ paddingLeft: 0 }}>
-                    <div className="fact-top">
-                      <span className="fact-text">{f.text}</span>
-                    </div>
-                    {check && (
-                      <p className="fiche-check-note">{check.note}</p>
-                    )}
-                    <div className="fact-meta">
-                      <ConfBars level={confLevel(f.confidence ?? undefined)} />
-                    </div>
-                    {f.sourcePassage && (
-                      <details className="verbatim">
-                        <summary>passage source</summary>
-                        <blockquote>{f.sourcePassage}</blockquote>
-                      </details>
-                    )}
-                  </div>
-                );
-              })}
+        {/* Faits */}
+        <section className="section" style={{ marginTop: '2rem' }}>
+          <div className="section-head">
+            <div className="ttl">
+              <Eyebrow>Preuve</Eyebrow>
+              <h2 style={{ marginTop: '.1rem' }}>
+                Faits sourcés
+                {extractingFacts && (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--t-mono)', color: 'var(--ink-3)', marginLeft: '.75rem', fontWeight: 400 }}>
+                    Extraction des faits…
+                  </span>
+                )}
+              </h2>
             </div>
-          </>
-        )}
-      </section>
+            {facts.length > 0 && !factChecks && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.4rem' }}>
+                <Btn
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleFactCheck}
+                  disabled={factChecking}
+                >
+                  {factChecking ? 'Vérification…' : 'Vérifier les faits'}
+                </Btn>
+                {factCheckError && (
+                  <p style={{ color: 'var(--danger)', fontSize: 'var(--t-xs)' }}>
+                    {factCheckError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {facts.length === 0 ? (
+            <p style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-serif)', fontStyle: 'italic' }}>
+              Aucun fait extrait pour ce document.
+            </p>
+          ) : (
+            <>
+              {factChecks && (
+                <>
+                  <div style={{ marginBottom: '.5rem' }}>
+                    <CostLine cost={factChecks.cost} />
+                  </div>
+                </>
+              )}
+              <div className="fiche-facts compact">
+                {facts.map((f) => {
+                  const check = factChecks?.checks.find((c) => c.factId === f.id);
+                  return (
+                    <div key={f.id} className="fact" style={{ paddingLeft: 0 }}>
+                      <div className="fact-top">
+                        <ConfBars level={confLevel(f.confidence ?? undefined)} />
+                        <span className="fact-text">{f.text}</span>
+                      </div>
+                      {check && <p className="fiche-check-note">{check.note}</p>}
+                      {f.sourcePassage && (
+                        <details className="verbatim">
+                          <summary>passage source</summary>
+                          <blockquote>{f.sourcePassage}</blockquote>
+                        </details>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </section>
+
+      </div>
     </div>
   );
 }

@@ -562,6 +562,26 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 .fiche-facts { display: flex; flex-direction: column; max-width: var(--read-w); }
 .fiche-check-note { font-size: var(--t-xs); color: var(--ink-2); margin: .35rem 0 0; padding: .4rem .6rem; border-left: 2px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
+/* Two-column fiche grid */
+.fiche-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: clamp(1.5rem, 3.5vw, 3.25rem); align-items: start; max-width: 1300px; margin-top: 2rem; }
+.fiche-main { min-width: 0; }
+.fiche-side { min-width: 0; position: sticky; top: 72px; }
+.fiche-grid .section { max-width: none; }
+.fiche-main > .fiche-lead { max-width: none; }
+.fiche-main > *:first-child, .fiche-side > *:first-child { margin-top: 0; }
+@media (max-width: 1100px) {
+  .fiche-grid { grid-template-columns: 1fr; max-width: var(--read-w); }
+  .fiche-side { position: static; }
+}
+
+/* Condensed facts scoped to fiche (does not affect brief/evidence .fact rules) */
+.fiche-facts.compact { gap: 0; max-width: none; }
+.fiche-facts.compact .fact { padding: .5rem 0; border-top: 1px solid var(--line); }
+.fiche-facts.compact .fact:first-child { border-top: none; padding-top: 0; }
+.fiche-facts.compact .fact-top { align-items: baseline; gap: .55rem; }
+.fiche-facts.compact .fact-text { font-size: .9rem; line-height: 1.5; }
+.fiche-facts.compact .verbatim { margin-top: .35rem; }
+
 /* ============================================================
    PRESERVED — existing animation utilities
    ============================================================ */

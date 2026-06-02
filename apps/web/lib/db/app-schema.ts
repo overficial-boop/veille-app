@@ -82,6 +82,9 @@ export const facts = pgTable('facts', {
   provenance: jsonb('provenance').notNull(),
   extractedBy: jsonb('extracted_by').notNull(),
   confidence: real('confidence'),
+  // Journal: set when a fact is promoted to the "what's new" feed by the refresh novelty gate.
+  journalAt: timestamp('journal_at', { withTimezone: true }),
+  journalReason: text('journal_reason'),
   extractedAt: timestamp('extracted_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

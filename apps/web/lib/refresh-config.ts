@@ -7,6 +7,8 @@ export type RefreshConfig = {
   candidateScoreFloor: number;
   relevanceKeepFloor: number;
   relevanceContentBudget: number;
+  journalEnabled: boolean;
+  journalMaxPerRefresh: number;
 };
 
 // candidateScoreFloor 0.4 was empirically calibrated against live dossiers (the "relevance pass");
@@ -18,6 +20,8 @@ const DEFAULTS: RefreshConfig = {
   candidateScoreFloor: 0.4,
   relevanceKeepFloor: 0.5,
   relevanceContentBudget: 6000,
+  journalEnabled: true,
+  journalMaxPerRefresh: 5,
 };
 
 /** Positive finite number from an env string, else the default. Fractional values pass
@@ -37,6 +41,8 @@ export function resolveRefreshConfig(env: Record<string, string | undefined>): R
     candidateScoreFloor: num(env.VEILLE_CANDIDATE_SCORE_FLOOR, DEFAULTS.candidateScoreFloor),
     relevanceKeepFloor: num(env.VEILLE_RELEVANCE_KEEP_FLOOR, DEFAULTS.relevanceKeepFloor),
     relevanceContentBudget: num(env.VEILLE_RELEVANCE_CONTENT_BUDGET, DEFAULTS.relevanceContentBudget),
+    journalEnabled: env.VEILLE_JOURNAL_ENABLED === undefined ? DEFAULTS.journalEnabled : env.VEILLE_JOURNAL_ENABLED !== 'false',
+    journalMaxPerRefresh: num(env.VEILLE_JOURNAL_MAX, DEFAULTS.journalMaxPerRefresh),
   };
 }
 

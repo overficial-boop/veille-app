@@ -90,6 +90,7 @@ type Progress =
   | { type: 'source-start'; label: string }
   | { type: 'document'; sourceLabel: string; title: string; status: 'kept' | 'suggestion'; kept: number; total: number }
   | { type: 'source-error'; label: string; message: string }
+  | { type: 'journal'; state: 'start' | 'done'; promoted: number }
   | { type: 'done'; total: number }
   | SynthesisProgress;
 
@@ -125,7 +126,7 @@ type ProgressLine = {
 
 /** The synthesis (brief/update) step — a single live line, distinct from the source rows. */
 type SynthLine =
-  | { state: 'running'; phase: 'brief' | 'update' }
+  | { state: 'running'; phase: 'brief' | 'update' | 'journal' }
   | { state: 'error'; message: string };
 
 export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
@@ -225,6 +226,9 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
           // closes the stream (onerror, below).
           doneRef.current = true;
           setDocTotal(p.total);
+        } else if (p.type === 'journal') {
+          // The novelty gate runs after the pull, before the stream closes.
+          setSynth(p.state === 'start' ? { state: 'running', phase: 'journal' } : null);
         } else if (p.type === 'synthesis') {
           if (p.state === 'start') {
             setSynth({ state: 'running', phase: p.phase });
@@ -385,7 +389,9 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
                   {synth.state === 'running'
                     ? synth.phase === 'brief'
                       ? 'Rédaction de la synthèse…'
-                      : 'Rédaction de la mise à jour…'
+                      : synth.phase === 'journal'
+                        ? 'Analyse des nouveautés…'
+                        : 'Rédaction de la mise à jour…'
                     : 'Synthèse indisponible — les faits sont enregistrés.'}
                 </span>
                 <span className="pstate">{synth.state === 'running' ? 'en cours' : 'indisponible'}</span>

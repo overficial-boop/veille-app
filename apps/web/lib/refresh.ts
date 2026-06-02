@@ -1,13 +1,15 @@
-import { eq } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { db } from './db';
-import { dossiers, sources, documents } from './db/schema';
+import { dossiers, sources, documents, facts } from './db/schema';
 import { extract, findAdapter } from '@veille/core';
 import { discoverTavily, discoverRss, discoverYouTubeChannel } from '@veille/discovery';
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { freshCandidates } from './dedup';
 import { isRecentCandidate } from './temporal';
-import { upsertDocument } from './documents';
+import { upsertDocument, extractFactsForDocument } from './documents';
+import { listJournal, promoteFactsToJournal } from './dossiers';
+import { selectJournalWorthy, journalTextsOf } from './journal';
 import { hostOf } from './host';
 import { getRefreshConfig, type RefreshConfig } from './refresh-config';
 import { sourcesForPhase } from './source-phase';
@@ -18,6 +20,7 @@ export type RefreshProgress =
   | { type: 'source-start'; label: string }
   | { type: 'document'; sourceLabel: string; title: string; status: 'kept' | 'suggestion'; kept: number; total: number }
   | { type: 'source-error'; label: string; message: string }
+  | { type: 'journal'; state: 'start' | 'done'; promoted: number }
   | { type: 'done'; total: number };
 
 export type StreamProgress = RefreshProgress | SynthesisProgress;
@@ -109,6 +112,7 @@ export async function refreshDossier(
   const ctx: PullCtx = { dossierId, intent: subjectHint || dossier?.intent || '', language: lang, cfg };
   let kept = 0;
   let suggested = 0;
+  const newKeptUrls: string[] = [];
 
   for (const src of srcRows) {
     const needs = src.kind === 'standing' || !src.lastExtractedAt || opts.force;
@@ -137,7 +141,7 @@ export async function refreshDossier(
           if (!findAdapter({ kind: 'url', url: c.url })) continue;
           try {
             const status = await processCandidate(ctx, c.url, c.publishedAt, c.title);
-            if (status === 'kept') kept++; else suggested++;
+            if (status === 'kept') { kept++; newKeptUrls.push(c.url); } else suggested++;
             onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: c.title ?? c.url, status, kept, total: kept + suggested });
           } catch {
             /* skip a bad candidate URL, keep going */
@@ -148,7 +152,7 @@ export async function refreshDossier(
         const title = src.label ?? undefined;
         try {
           const status = await processCandidate(ctx, url, undefined, title);
-          if (status === 'kept') kept++; else suggested++;
+          if (status === 'kept') { kept++; newKeptUrls.push(url); } else suggested++;
           onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: title ?? url, status, kept, total: kept + suggested });
         } catch {
           /* bad item URL: skip; lastExtractedAt is still set below, so it isn't retried forever */
@@ -158,6 +162,42 @@ export async function refreshDossier(
     } catch (e) {
       // leave lastExtractedAt unset so it retries next refresh
       onProgress({ type: 'source-error', label: src.label ?? src.connector, message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // Journal: on refresh, extract facts from the docs newly kept this run, then let the LLM gate
+  // promote the genuinely-new + important ones (vs the brief + existing journal).
+  if (phase === 'refresh' && cfg.journalEnabled && newKeptUrls.length > 0 && dossier) {
+    const newDocs = await db
+      .select({ id: documents.id, url: documents.url, title: documents.title, content: documents.content })
+      .from(documents)
+      .where(and(eq(documents.dossierId, dossierId), inArray(documents.url, newKeptUrls)));
+    const dossierForFacts = { id: dossier.id, name: dossier.name, intent: dossier.intent, language: dossier.language };
+    for (const doc of newDocs) {
+      try { await extractFactsForDocument(dossierForFacts, doc); } catch { /* skip a doc that won't extract */ }
+    }
+    const candidates = newDocs.length
+      ? await db
+          .select({ id: facts.id, text: facts.text })
+          .from(facts)
+          .where(and(eq(facts.dossierId, dossierId), inArray(facts.documentId, newDocs.map((d) => d.id))))
+      : [];
+    if (candidates.length > 0) {
+      onProgress({ type: 'journal', state: 'start', promoted: 0 });
+      try {
+        const journalTexts = journalTextsOf(await listJournal(dossierId));
+        const selections = await selectJournalWorthy({
+          subject: subjectHint || dossier.intent || dossier.name,
+          brief: dossier.brief ?? '',
+          journalTexts,
+          candidates,
+          max: cfg.journalMaxPerRefresh,
+        });
+        await promoteFactsToJournal(dossierId, selections);
+        onProgress({ type: 'journal', state: 'done', promoted: selections.length });
+      } catch {
+        onProgress({ type: 'journal', state: 'done', promoted: 0 });
+      }
     }
   }
 

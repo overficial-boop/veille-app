@@ -1,0 +1,1 @@
+ALTER TABLE "dossiers" ADD COLUMN "brief_refs" jsonb;

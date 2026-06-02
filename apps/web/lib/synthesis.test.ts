@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hostOf, groupFactsByHost, parseBrief, renderGroups, stripUnknownLinks, buildBriefPrompt } from './synthesis';
+import { hostOf, groupFactsByHost, parseBrief, renderGroups, stripUnknownLinks, buildBriefPrompt, groupFactsByArticle, buildBriefRefs, renderArticleGroups } from './synthesis';
 import type { Fact } from '@veille/core';
 
 const f = (sourceUrl: string, text: string, extractedAt = '2026-05-30T00:00:00.000Z'): Fact =>
@@ -66,11 +66,41 @@ describe('stripUnknownLinks', () => {
   });
 });
 
-describe('buildBriefPrompt host tags', () => {
-  it('instructs citing with the bracketed publication tag, not URLs', () => {
-    const p = buildBriefPrompt('Sujet', 'fr', [{ host: 'lefigaro.fr', facts: [] }]);
-    expect(p).toMatch(/\[lefigaro\.fr\]/);
-    expect(p).toMatch(/publication tag/i);
+describe('groupFactsByArticle', () => {
+  it('groups facts by source URL, preserving first-appearance order', () => {
+    const groups = groupFactsByArticle([f('https://lemonde.fr/a', '1'), f('https://rtl.fr/b', '2'), f('https://lemonde.fr/a', '3')]);
+    expect(groups.map((g) => g.url)).toEqual(['https://lemonde.fr/a', 'https://rtl.fr/b']);
+    expect(groups[0]!.facts.map((x) => x.text)).toEqual(['1', '3']);
+  });
+});
+
+describe('buildBriefRefs', () => {
+  it('numbers articles 1..N, taking title/docId from meta, host from the url, falling back to host', () => {
+    const groups = groupFactsByArticle([f('https://lemonde.fr/a', '1'), f('https://rtl.fr/b', '2')]);
+    const meta = new Map([['https://lemonde.fr/a', { docId: 'd1', title: 'Titre A' }]]);
+    expect(buildBriefRefs(groups, meta)).toEqual([
+      { n: 1, url: 'https://lemonde.fr/a', docId: 'd1', title: 'Titre A', host: 'lemonde.fr' },
+      { n: 2, url: 'https://rtl.fr/b', docId: null, title: 'rtl.fr', host: 'rtl.fr' },
+    ]);
+  });
+});
+
+describe('renderArticleGroups', () => {
+  it('renders numbered "## [n] title — host" headers with bare facts', () => {
+    const groups = groupFactsByArticle([f('https://lemonde.fr/a', 'fact1')]);
+    const refs = buildBriefRefs(groups, new Map([['https://lemonde.fr/a', { docId: 'd1', title: 'Titre A' }]]));
+    expect(renderArticleGroups(groups, refs)).toBe('## [1] Titre A — lemonde.fr\n- fact1');
+  });
+});
+
+describe('buildBriefPrompt article numbers', () => {
+  it('instructs citing with bracketed article numbers, multi-paragraph prose, not URLs/tags', () => {
+    const groups = groupFactsByArticle([f('https://lefigaro.fr/a', 'fact1')]);
+    const refs = buildBriefRefs(groups, new Map([['https://lefigaro.fr/a', { docId: 'd1', title: 'Titre' }]]));
+    const p = buildBriefPrompt('Sujet', 'fr', groups, refs);
+    expect(p).toMatch(/\[2, 5\]/);
+    expect(p).toMatch(/## \[1\] Titre — lefigaro\.fr/);
+    expect(p).toMatch(/thematic paragraphs/i);
     expect(p).not.toMatch(/Markdown link/i);
   });
 });

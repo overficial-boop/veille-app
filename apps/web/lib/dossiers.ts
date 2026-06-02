@@ -149,9 +149,14 @@ export async function updateSource(
   await db.update(sources).set(set).where(and(eq(sources.id, sourceId), eq(sources.dossierId, dossier.id)));
 }
 
-/** Replaces the brief + source_notes wholesale (on-demand brief regeneration). */
-export async function setBrief(dossierId: string, brief: string, sourceNotes: Record<string, string>) {
-  await db.update(dossiers).set({ brief, sourceNotes, briefGeneratedAt: new Date() }).where(eq(dossiers.id, dossierId));
+/** Replaces the brief + source_notes + numbered article refs wholesale (on-demand brief regeneration). */
+export async function setBrief(
+  dossierId: string,
+  brief: string,
+  sourceNotes: Record<string, string>,
+  briefRefs: { n: number; url: string; docId: string | null; title: string; host: string }[] = [],
+) {
+  await db.update(dossiers).set({ brief, sourceNotes, briefRefs, briefGeneratedAt: new Date() }).where(eq(dossiers.id, dossierId));
 }
 
 

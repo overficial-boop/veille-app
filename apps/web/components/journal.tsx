@@ -1,71 +1,33 @@
 'use client';
 
-import * as React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Eyebrow } from './veille-ui';
-import { citeComponents, prepareCiteMd } from './cited-markdown';
-import { useCitations, SourcesToggle } from './citations-context';
+import { proseComponents } from './prose';
 
-export type JournalEntry = { id: string; when: string; body: string; kind: 'actualite' | 'complement' };
+export type JournalEntry = { id: string; when: string; body: string };
 
-/**
- * The dossier journal — two recency streams. "Actualité" = developments published since the
- * last refresh; "Compléments / Découvertes" = older or undated material newly found. Citations
- * render as numbered superscripts (shared map + toggle with the brief).
- */
-export function Journal({
-  entries,
-  citations,
-}: {
-  entries: JournalEntry[];
-  citations: Record<string, number>;
-}) {
-  const { show } = useCitations();
-  const components = React.useMemo(() => citeComponents(citations), [citations]);
+/** Dossier journal — a single dated "nouveautés" stream of clean prose. Sources live in the
+ *  Documents tab; the journal carries no inline citations. */
+export function Journal({ entries }: { entries: JournalEntry[] }) {
   if (entries.length === 0) return null;
-
-  const actu = entries.filter((e) => e.kind === 'actualite');
-  const comp = entries.filter((e) => e.kind === 'complement');
-
-  const stream = (items: JournalEntry[]) => (
-    <div className="journal">
-      {items.map((u) => (
-        <div key={u.id} className="update fade">
-          <div className="when">{u.when}</div>
-          <div className={'body' + (show ? ' show-src' : '')}>
-            <ReactMarkdown components={components}>{prepareCiteMd(u.body)}</ReactMarkdown>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
   return (
-    <>
-      {actu.length > 0 && (
-        <section className="section">
-          <div className="section-head">
-            <div className="ttl">
-              <Eyebrow>Journal</Eyebrow>
-              <h2 style={{ marginTop: '.1rem' }}>Actualité</h2>
+    <section className="section">
+      <div className="section-head">
+        <div className="ttl">
+          <Eyebrow>Journal</Eyebrow>
+          <h2 style={{ marginTop: '.1rem' }}>Nouveautés</h2>
+        </div>
+      </div>
+      <div className="journal">
+        {entries.map((u) => (
+          <div key={u.id} className="update fade">
+            <div className="when">{u.when}</div>
+            <div className="body">
+              <ReactMarkdown components={proseComponents}>{u.body}</ReactMarkdown>
             </div>
-            <SourcesToggle />
           </div>
-          {stream(actu)}
-        </section>
-      )}
-      {comp.length > 0 && (
-        <section className="section">
-          <div className="section-head">
-            <div className="ttl">
-              <Eyebrow>Journal</Eyebrow>
-              <h2 style={{ marginTop: '.1rem' }}>Compléments / Découvertes</h2>
-            </div>
-            {actu.length === 0 && <SourcesToggle />}
-          </div>
-          {stream(comp)}
-        </section>
-      )}
-    </>
+        ))}
+      </div>
+    </section>
   );
 }

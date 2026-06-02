@@ -8,7 +8,7 @@ import {
   parseElaboration,
   ELABORATE_SCHEMA,
 } from './prompts';
-import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, TokenCost } from './types';
+import type { ReviewBlock, BulletsBlock, ElaborationBlock, FactChecksBlock, FactCheck, TokenCost } from './types';
 
 // LlmResponse shape (from packages/core/src/llm.ts):
 //   { text: string; inputTokens: number; outputTokens: number; model: string }
@@ -85,4 +85,13 @@ export async function factCheck(
   });
 
   return { checks, ...meta('factcheck-v1', cost) };
+}
+
+/** PURE. Merge fresh fact-check results into an existing block, upserting each check by factId
+ *  (latest wins) and stamping the block with the incoming run's meta/cost. Used by the per-fact
+ *  verifier so a single re-check folds into the document's stored checks without re-running all. */
+export function mergeFactChecks(existing: FactChecksBlock | null, incoming: FactChecksBlock): FactChecksBlock {
+  const byId = new Map<string, FactCheck>((existing?.checks ?? []).map((c) => [c.factId, c]));
+  for (const c of incoming.checks) byId.set(c.factId, c);
+  return { ...incoming, checks: [...byId.values()] };
 }

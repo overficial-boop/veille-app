@@ -88,6 +88,7 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
   const [factChecks, setFactChecks] = React.useState<FactChecksBlock | null>(doc.factChecks);
   const [elaborating, setElaborating] = React.useState(false);
   const [factChecking, setFactChecking] = React.useState(false);
+  const [verifyingFactId, setVerifyingFactId] = React.useState<string | null>(null);
   const [withTavily, setWithTavily] = React.useState(false);
   const [elaborateError, setElaborateError] = React.useState<string | null>(null);
   const [factCheckError, setFactCheckError] = React.useState<string | null>(null);
@@ -180,6 +181,30 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
       setFactCheckError(e instanceof Error ? e.message : 'Erreur réseau');
     } finally {
       setFactChecking(false);
+    }
+  }
+
+  // Verify a single fact: the route re-checks just this fact and returns the merged block.
+  async function verifyOneFact(factId: string) {
+    setVerifyingFactId(factId);
+    setFactCheckError(null);
+    try {
+      const res = await fetch(`/api/dossiers/${slug}/documents/${doc.id}/factcheck`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ factId }),
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => res.statusText);
+        setFactCheckError(msg || 'Erreur inconnue');
+      } else {
+        const block = await res.json() as FactChecksBlock;
+        setFactChecks(block);
+      }
+    } catch (e) {
+      setFactCheckError(e instanceof Error ? e.message : 'Erreur réseau');
+    } finally {
+      setVerifyingFactId(null);
     }
   }
 
@@ -339,15 +364,15 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
                 )}
               </h2>
             </div>
-            {facts.length > 0 && !factChecks && (
+            {facts.length > 0 && facts.some((f) => !factChecks?.checks.some((c) => c.factId === f.id)) && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.4rem' }}>
                 <Btn
                   variant="ghost"
                   size="sm"
                   onClick={handleFactCheck}
-                  disabled={factChecking}
+                  disabled={factChecking || verifyingFactId !== null}
                 >
-                  {factChecking ? 'Vérification…' : 'Vérifier les faits'}
+                  {factChecking ? 'Vérification…' : 'Vérifier tous les faits'}
                 </Btn>
                 {factCheckError && (
                   <p style={{ color: 'var(--danger)', fontSize: 'var(--t-xs)' }}>
@@ -380,7 +405,18 @@ export function DocumentFiche({ document: doc, facts, slug, canAnalyze }: Docume
                         <ConfBars level={confLevel(f.confidence ?? undefined)} />
                         <span className="fact-text">{f.text}</span>
                       </div>
-                      {check && <p className="fiche-check-note">{check.note}</p>}
+                      {check ? (
+                        <p className="fiche-check-note">{check.note}</p>
+                      ) : (
+                        <button
+                          type="button"
+                          className="fact-verify"
+                          onClick={() => verifyOneFact(f.id)}
+                          disabled={verifyingFactId !== null || factChecking}
+                        >
+                          {verifyingFactId === f.id ? 'Vérification…' : 'Vérifier ce fait'}
+                        </button>
+                      )}
                       {f.sourcePassage && (
                         <details className="verbatim">
                           <summary>passage source</summary>

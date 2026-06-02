@@ -2,22 +2,74 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Play, X, Check, Sparkles } from 'lucide-react';
 import { formatDateFr } from '@/components/templates/types';
 import { hostOf } from '@/lib/host';
 import { pubHue, pubMono } from '@/lib/publication';
 import { Btn, Eyebrow } from '@/components/veille-ui';
-import { setDocumentStatus, generateBriefAction } from '@/app/dossier/[slug]/actions';
+import { setDocumentStatus } from '@/app/dossier/[slug]/actions';
 import type { Doc } from '@/lib/documents';
 
+type BriefFrame =
+  | { type: 'brief-doc'; index: number; total: number; title: string }
+  | { type: 'synthesis'; phase: 'brief' | 'update'; state: 'start' | 'done' | 'skip' }
+  | { type: 'synthesis-error'; message: string };
+
 /**
- * GenerateBriefCta — the empty-brief prompt at the top of the workspace.
- * The brief is on-demand: until one exists, this invites the reader to assemble it.
- * generateBriefAction revalidates the dossier path, so the brief renders when the
- * transition resolves.
+ * GenerateBriefCta — the empty-brief prompt. On click it opens an SSE stream to the brief route
+ * and expands in place into a live step list (Analyse i/N · titre … Rédaction de la synthèse…),
+ * then refreshes so the brief + enriched cards render. (Click-triggered, so no StrictMode
+ * auto-start race; the stream is closed on unmount.)
  */
 export function GenerateBriefCta({ slug }: { slug: string }) {
-  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+  const [running, setRunning] = React.useState(false);
+  const [line, setLine] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const esRef = React.useRef<EventSource | null>(null);
+  // Outcome is read in the onerror (stream-close) handler, which can't see fresh state — track via refs.
+  const doneRef = React.useRef(false);
+  const outcomeRef = React.useRef<'skip' | 'error' | null>(null);
+
+  React.useEffect(() => () => esRef.current?.close(), []);
+
+  function start() {
+    if (running) return;
+    setRunning(true);
+    setNotice(null);
+    setLine('Préparation…');
+    doneRef.current = false;
+    outcomeRef.current = null;
+    const es = new EventSource(`/api/dossiers/${slug}/brief`);
+    esRef.current = es;
+    es.onmessage = (e) => {
+      let p: BriefFrame;
+      try { p = JSON.parse(e.data) as BriefFrame; } catch { return; }
+      if (p.type === 'brief-doc') setLine(`Analyse des documents — ${p.index}/${p.total} · ${p.title}`);
+      else if (p.type === 'synthesis' && p.state === 'start') setLine('Rédaction de la synthèse…');
+      else if (p.type === 'synthesis' && p.state === 'done') doneRef.current = true;
+      else if (p.type === 'synthesis' && p.state === 'skip') outcomeRef.current = 'skip';
+      else if (p.type === 'synthesis-error') outcomeRef.current = 'error';
+    };
+    es.onerror = () => {
+      // The server closes the stream after the final frame, surfacing here as onerror.
+      es.close();
+      esRef.current = null;
+      setRunning(false);
+      // On success a brief now exists and router.refresh() unmounts this CTA (Brief renders instead);
+      // otherwise we stay mounted and explain why nothing appeared instead of silently reverting.
+      if (!doneRef.current) {
+        setNotice(
+          outcomeRef.current === 'skip'
+            ? 'Aucun fait à synthétiser pour l’instant — gardez des documents, puis réessayez.'
+            : 'La génération du brief a échoué. Réessayez.',
+        );
+      }
+      router.refresh();
+    };
+  }
+
   return (
     <section className="section brief-cta" style={{ marginTop: 0 }}>
       <div className="section-head">
@@ -26,16 +78,19 @@ export function GenerateBriefCta({ slug }: { slug: string }) {
           <h2 style={{ marginTop: '.1rem' }}>Situation actuelle</h2>
         </div>
       </div>
-      <div className="brief-empty">Pas encore de synthèse — rédigez-la à partir des documents retenus.</div>
-      <Btn
-        variant="primary"
-        size="sm"
-        icon={Sparkles}
-        onClick={() => !isPending && startTransition(() => generateBriefAction(slug))}
-        disabled={isPending}
-      >
-        {isPending ? 'Rédaction…' : 'Générer le brief'}
-      </Btn>
+      {running ? (
+        <div className="brief-empty" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+          <span className="spin" />
+          {line}
+        </div>
+      ) : (
+        <>
+          <div className="brief-empty">{notice ?? 'Pas encore de synthèse — rédigez-la à partir des documents retenus.'}</div>
+          <Btn variant="primary" size="sm" icon={Sparkles} onClick={start}>
+            Générer le brief
+          </Btn>
+        </>
+      )}
     </section>
   );
 }
@@ -152,6 +207,9 @@ export function KeptFeed({ slug, documents }: { slug: string; documents: Doc[] }
 
                 <div className="doc-foot">
                   <span>{formatDateFr(new Date(date))}</span>
+                  {d.factCount > 0 && (
+                    <span className="doc-facts">{d.factCount} {d.factCount === 1 ? 'fait' : 'faits'}</span>
+                  )}
                   {badges.length > 0 && (
                     <span className="doc-badges">
                       {badges.map((b) => (

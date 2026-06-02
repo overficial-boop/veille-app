@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { buildCitationNumbers } from './citations';
+import {
+  hostTagGroups,
+  buildHostCitations,
+  renderHostCitations,
+  buildSourceRows,
+} from './citations';
 
 describe('buildCitationNumbers', () => {
   it('numbers brief-cited URLs first, in first-appearance order', () => {
@@ -53,5 +59,54 @@ describe('buildCitationNumbers', () => {
     const brief = '[link](https://en.wikipedia.org/wiki/France_(country))';
     const map = buildCitationNumbers(brief, []);
     expect(map['https://en.wikipedia.org/wiki/France_(country)']).toBe(1);
+  });
+});
+
+describe('hostTagGroups', () => {
+  it('extracts comma-split tokens from [..] groups, ignoring real [text](url) links', () => {
+    const md = 'a [lefigaro.fr, apnews.com] b [Le Monde](https://lemonde.fr) c [ouest-france.fr]';
+    expect(hostTagGroups(md)).toEqual([['lefigaro.fr', 'apnews.com'], ['ouest-france.fr']]);
+  });
+});
+
+describe('buildHostCitations', () => {
+  it('numbers brief-cited hosts first (appearance order), then remaining fact hosts', () => {
+    const brief = 'x [b.fr] y [a.fr, b.fr] z';
+    const map = buildHostCitations(brief, ['a.fr', 'b.fr', 'c.fr']);
+    expect(map).toEqual({ 'b.fr': 1, 'a.fr': 2, 'c.fr': 3 });
+  });
+  it('ignores brief tags that are not known fact hosts', () => {
+    expect(buildHostCitations('q [unknown.fr] w', ['a.fr'])).toEqual({ 'a.fr': 1 });
+  });
+  it('empty brief → fact hosts in given order', () => {
+    expect(buildHostCitations(null, ['a.fr', 'b.fr'])).toEqual({ 'a.fr': 1, 'b.fr': 2 });
+  });
+});
+
+describe('renderHostCitations', () => {
+  const nums = { 'a.fr': 1, 'b.fr': 2 };
+  it('rewrites a known-host group into anchor links (one per host)', () => {
+    expect(renderHostCitations('hi [a.fr, b.fr] x', nums))
+      .toBe('hi [a.fr](#cite-a.fr)[b.fr](#cite-b.fr) x');
+  });
+  it('leaves a group with no known host untouched', () => {
+    expect(renderHostCitations('see [note] end', nums)).toBe('see [note] end');
+  });
+  it('does not touch real [text](url) links', () => {
+    expect(renderHostCitations('[Le Monde](https://lemonde.fr)', nums)).toBe('[Le Monde](https://lemonde.fr)');
+  });
+});
+
+describe('buildSourceRows', () => {
+  it('orders by number; representative url = first fact url for the host; attaches note', () => {
+    const rows = buildSourceRows(
+      { 'a.fr': 1, 'b.fr': 2 },
+      ['https://a.fr/1', 'https://a.fr/2', 'https://b.fr/x'],
+      { 'a.fr': 'note A' },
+    );
+    expect(rows).toEqual([
+      { host: 'a.fr', n: 1, url: 'https://a.fr/1', note: 'note A' },
+      { host: 'b.fr', n: 2, url: 'https://b.fr/x', note: undefined },
+    ]);
   });
 });

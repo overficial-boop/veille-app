@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hostOf, groupFactsByHost, parseBrief, renderGroups, stripUnknownLinks } from './synthesis';
+import { hostOf, groupFactsByHost, parseBrief, renderGroups, stripUnknownLinks, buildBriefPrompt } from './synthesis';
 import type { Fact } from '@veille/core';
 
 const f = (sourceUrl: string, text: string, extractedAt = '2026-05-30T00:00:00.000Z'): Fact =>
@@ -63,6 +63,15 @@ describe('stripUnknownLinks', () => {
     const a = ['https://fr.wikipedia.org/wiki/Pi_(mathématiques)'];
     expect(stripUnknownLinks('voir [Pi](https://fr.wikipedia.org/wiki/Pi_(mathématiques)) ici', a))
       .toBe('voir [Pi](https://fr.wikipedia.org/wiki/Pi_(mathématiques)) ici');
+  });
+});
+
+describe('buildBriefPrompt host tags', () => {
+  it('instructs citing with the bracketed publication tag, not URLs', () => {
+    const p = buildBriefPrompt('Sujet', 'fr', [{ host: 'lefigaro.fr', facts: [] }]);
+    expect(p).toMatch(/\[lefigaro\.fr\]/);
+    expect(p).toMatch(/publication tag/i);
+    expect(p).not.toMatch(/Markdown link/i);
   });
 });
 

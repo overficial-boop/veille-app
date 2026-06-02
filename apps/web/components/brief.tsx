@@ -4,18 +4,22 @@ import * as React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Eyebrow } from './veille-ui';
 import { citeComponents, prepareCiteMd } from './cited-markdown';
+import { renderHostCitations } from '@/lib/citations';
 import { useCitations, SourcesToggle } from './citations-context';
 
 /**
  * The dossier brief — the synthesis, rendered as a `.section` with a drop-cap.
- *
- * Citations render as numbered superscripts (¹²³), hidden until "Afficher les sources"
- * is toggled. That toggle is shared (CitationsProvider), so the journal reveals in step.
- * The `citations` map is shared with the journal + evidence so each URL keeps one number.
+ * Citations are publication tags ([lefigaro.fr]) the model emits; we rewrite them into the
+ * shared numbered-superscript pipeline. Numbers come from `hostNumbers` (one per publication),
+ * shared with the Sources list so each superscript jumps to its entry. Hidden until the toggle.
  */
-export function Brief({ brief, citations }: { brief: string; citations: Record<string, number> }) {
+export function Brief({ brief, hostNumbers }: { brief: string; hostNumbers: Record<string, number> }) {
   const { show } = useCitations();
-  const md = React.useMemo(() => prepareCiteMd(brief), [brief]);
+  const md = React.useMemo(() => prepareCiteMd(renderHostCitations(brief, hostNumbers)), [brief, hostNumbers]);
+  const citations = React.useMemo(
+    () => Object.fromEntries(Object.entries(hostNumbers).map(([h, n]) => [`#cite-${h}`, n])),
+    [hostNumbers],
+  );
   const components = React.useMemo(() => citeComponents(citations), [citations]);
 
   return (

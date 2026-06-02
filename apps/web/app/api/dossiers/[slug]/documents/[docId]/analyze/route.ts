@@ -1,8 +1,7 @@
 import { type NextRequest } from 'next/server';
 import { getSession } from '@/lib/session';
 import { getDossier } from '@/lib/dossiers';
-import { getDocument, setDocumentCore } from '@/lib/documents';
-import { analyzeDocumentCore } from '@/lib/document/analyze';
+import { getDocument, ensureDocumentCore } from '@/lib/documents';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,16 +17,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ sl
   if (!dossier) return new Response('not found', { status: 404 });
   const doc = await getDocument(dossier.id, docId);
   if (!doc) return new Response('not found', { status: 404 });
-  if (doc.review) {
-    return Response.json({ shortSummary: doc.shortSummary, review: doc.review, bullets: doc.bullets });
-  }
-  if (!doc.content) return new Response('no stored content to analyze', { status: 409 });
-  const core = await analyzeDocumentCore({
-    content: doc.content,
-    title: doc.title ?? doc.url,
-    siteName: doc.siteName ?? undefined,
-    lang: dossier.language ?? 'fr',
-  });
-  await setDocumentCore(docId, core);
-  return Response.json(core);
+  if (!doc.review && !doc.content) return new Response('no stored content to analyze', { status: 409 });
+  await ensureDocumentCore({ id: dossier.id, language: dossier.language }, doc);
+  const fresh = await getDocument(dossier.id, docId);
+  return Response.json({ shortSummary: fresh?.shortSummary, review: fresh?.review, bullets: fresh?.bullets });
 }

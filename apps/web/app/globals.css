@@ -629,3 +629,19 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 @utility animate-fact-in {
   animation: fact-in 0.35s ease-out both;
 }
+
+/* ============================================================
+   ADMIN — discovery diagnostics
+   ============================================================ */
+.diag-tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.diag-tabs button { font-family: var(--font-mono); font-size: var(--t-mono); padding: .3rem .7rem; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: none; color: var(--ink-2); cursor: pointer; }
+.diag-tabs button.on { color: var(--accent); border-color: var(--accent); }
+.diag-empty { color: var(--ink-3); font-style: italic; font-family: var(--font-serif); }
+.diag-run { margin-bottom: .8rem; }
+.diag-run > summary { cursor: pointer; font-family: var(--font-mono); font-size: var(--t-sm); color: var(--ink-2); }
+.funnel { width: 100%; border-collapse: collapse; margin-top: .6rem; font-size: var(--t-xs); }
+.funnel th, .funnel td { text-align: left; padding: .25rem .5rem; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28ch; }
+.funnel th { color: var(--ink-3); font-family: var(--font-mono); font-weight: 400; }
+.funnel .fv-kept td:first-child { color: var(--accent); }
+.funnel tr[class^="fv-rejected"] td:first-child { color: var(--ink-3); }
+.funnel .fv-suggestion td:first-child { color: var(--ink-2); }

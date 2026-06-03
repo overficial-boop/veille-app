@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDate, factPublishedAt, backfillPublishedAt, isRecentCandidate } from './temporal';
+import { parseDate, factPublishedAt, backfillPublishedAt, isRecentCandidate, isWithinDays } from './temporal';
 
 describe('parseDate', () => {
   it('parses ISO dates', () => {
@@ -54,5 +54,20 @@ describe('isRecentCandidate', () => {
   });
   it('null lastRefresh → recent', () => {
     expect(isRecentCandidate('2020-01-01', null)).toBe(true);
+  });
+});
+
+describe('isWithinDays', () => {
+  const now = new Date('2026-06-03T12:00:00Z');
+  it('undated → within (benefit of the doubt)', () => {
+    expect(isWithinDays(undefined, now, 7)).toBe(true);
+  });
+  it('published within the window → true (this morning passes even after a same-day refresh)', () => {
+    expect(isWithinDays('2026-06-03T06:38:00Z', now, 7)).toBe(true);
+    expect(isWithinDays('2026-05-30T20:00:00Z', now, 7)).toBe(true);
+  });
+  it('published before the window → false', () => {
+    expect(isWithinDays('2026-05-20T00:00:00Z', now, 7)).toBe(false);
+    expect(isWithinDays('2024-01-01', now, 7)).toBe(false);
   });
 });

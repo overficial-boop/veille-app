@@ -40,3 +40,14 @@ export function isRecentCandidate(publishedAt: string | undefined, lastRefresh: 
   return d === null || d > lastRefresh;
 }
 
+/** A refresh candidate is "within the recency window" if it has no usable date (kept, benefit of
+ *  the doubt) or it was published within the last `days` (relative to `now`). Anchoring recency to
+ *  a rolling window — NOT the last-refresh timestamp — means re-refreshing the same day still pulls
+ *  recent articles (dedup against already-seen URLs prevents re-pulling). */
+export function isWithinDays(publishedAt: string | undefined, now: Date, days: number): boolean {
+  const d = parseDate(publishedAt);
+  if (d === null) return true;
+  const cutoff = now.getTime() - days * 86_400_000;
+  return d.getTime() > cutoff;
+}
+

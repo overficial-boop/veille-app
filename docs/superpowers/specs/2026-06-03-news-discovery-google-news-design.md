@@ -44,7 +44,7 @@ Pure parts (payload construction, response URL extraction) are unit-tested; the 
 - Calls Gemini (`gemini-2.5-flash`) with the `google_search` tool, prompting for recent news on the query in the dossier language.
 - Reads `candidates[0].groundingMetadata.groundingChunks[].web.{uri,title}`; each `uri` is a `vertexaisearch.cloud.google.com/grounding-api-redirect/…` link → resolve to the publisher by **following the HTTP redirect** (`fetch(..., { redirect:'follow' }).url`); skip on failure.
 - Map to `Candidate` (unscored), cap to a handful.
-- **⚠ UNVERIFIED in this environment** (the spike call hung). **Plan task #1 is a spike** to confirm grounding returns resolvable URLs. If it proves unreliable, the documented secondary fallback is **GDELT DOC API** (free, returns direct publisher URLs, `sourcelang`/`sourcecountry` filters — noisier but clean and proven to give direct URLs).
+- **VERIFIED by spike:** one grounded call returned 17 chunks (atlantico.fr, publicsenat.fr, theguardian.com, africanews.com, youtube.com…); the first `vertexaisearch` redirect followed a clean HTTP 302 to `https://atlantico.fr/article/…` (a real publisher article). So resolution is a **simple redirect-follow — no batchexecute**. Caveats observed: the grounded call is **slow (~30–60s)** — fine for a fallback; coverage is **more mixed (French + international) and fewer items** than Google News, consistent with its fallback role. If grounding is ever unavailable, **GDELT DOC API** (free, direct publisher URLs, `sourcelang`/`sourcecountry` filters — noisier) is the documented secondary.
 
 ### 4. Provider selection — `packages/discovery` + `apps/web/lib/refresh.ts`
 
@@ -87,7 +87,7 @@ Pure parts (payload construction, response URL extraction) are unit-tested; the 
 
 ## Integration points to resolve in the plan
 
-1. **Plan task #1 = grounding spike** (confirm `groundingMetadata` URLs resolve); pick grounding vs GDELT for the secondary fallback based on the result.
-2. `candidatesFor` dispatch + `discoverWatch` fallback chain location (in `@veille/discovery` so it's reusable + testable).
+1. Both engines are spike-verified (Google News decode → publisher URLs; grounding redirect → publisher URLs). GDELT stays a documented secondary, not built.
+2. `candidatesFor` dispatch + `discoverWatch` fallback chain location (in `@veille/discovery` so it's reusable + testable). The grounded call's ~30–60s latency means the fallback should only fire when Google News returns empty.
 3. Planner `PlannedSource` `google-news` variant + the single new-dossier call site; rebuild discovery.
 4. Backfill of existing watch tavily sources (migration vs one-off script) + `source-input.ts` manual-search change.

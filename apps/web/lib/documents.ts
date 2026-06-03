@@ -114,8 +114,8 @@ export async function getDocument(dossierId: string, id: string) {
 
 /**
  * The curated split for the workspace: every non-rejected document, partitioned by status.
- * Kept docs lead with the most relevant (relevance desc, NULLs last) then most recent;
- * suggestions order by relevance desc so the strongest candidates surface first.
+ * Kept docs are ordered by DATE (publishedAt, falling back to createdAt — newest first);
+ * suggestions stay ordered by relevance desc so the strongest candidates surface first.
  */
 export async function listDocumentsByStatus(dossierId: string) {
   const rows = await db
@@ -129,7 +129,8 @@ export async function listDocumentsByStatus(dossierId: string) {
     .where(eq(facts.dossierId, dossierId))
     .groupBy(facts.documentId);
   const withCounts = attachFactCounts(rows, counts);
-  const kept = withCounts.filter((r) => r.status === 'kept');
+  const dateOf = (d: { publishedAt: Date | null; createdAt: Date }) => (d.publishedAt ?? d.createdAt).getTime();
+  const kept = withCounts.filter((r) => r.status === 'kept').sort((a, b) => dateOf(b) - dateOf(a));
   const suggestions = withCounts.filter((r) => r.status === 'suggestion');
   return { kept, suggestions };
 }

@@ -249,6 +249,12 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
         // guard tells a normal completion from a real failure. On normal close
         // we refresh server data so the new brief / update / facts render.
         closeStream();
+        // Settle any source row still "pending": a source that yielded no document
+        // emits a `source-start` but never a `document` frame, so it would otherwise
+        // spin "lecture…" forever — making a finished run look hung when nothing is new.
+        setLines((prev) =>
+          prev.map((l) => (l.state === 'pending' ? { ...l, state: 'scanned', docs: l.docs ?? 0, kept: l.kept ?? 0 } : l)),
+        );
         if (doneRef.current) {
           setPhase('done');
           router.refresh();

@@ -62,9 +62,9 @@ describe('sourceSpecToRow', () => {
       connector: 'web', kind: 'item', purpose: 'state', input: { url: 'https://lemonde.fr/x' }, label: 'https://lemonde.fr/x',
     });
   });
-  it('search → standing/tavily', () => {
+  it('search → standing/google-news watch', () => {
     expect(sourceSpecToRow('search', 'gabriel attal')).toEqual({
-      connector: 'tavily', kind: 'standing', purpose: 'watch', input: { query: 'gabriel attal' }, label: 'gabriel attal',
+      connector: 'google-news', kind: 'standing', purpose: 'watch', input: { query: 'gabriel attal' }, label: 'gabriel attal',
     });
   });
   it('rss → standing/rss with resolved label, falling back to the value', () => {

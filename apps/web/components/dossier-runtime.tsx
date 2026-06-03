@@ -44,7 +44,7 @@ const ADD_SOURCE_OPTIONS: {
 
 function sourceTypeLabel(connector: string, source?: string): string {
   if (connector === 'web') return 'Page web';
-  if (connector === 'tavily') return 'Recherche';
+  if (connector === 'tavily' || connector === 'google-news') return 'Recherche';
   if (connector === 'rss') return source === 'youtube' ? 'Chaîne YouTube' : 'Flux RSS';
   return connector;
 }
@@ -56,6 +56,7 @@ function sourceTypeIcon(connector: string, source?: string): ComponentType<{ cla
     case 'web':
       return Globe;
     case 'tavily':
+    case 'google-news':
       return Search;
     case 'rss':
       return Rss;

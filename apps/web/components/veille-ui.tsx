@@ -125,7 +125,8 @@ function resolveSourceType(connector: string, source?: string) {
   }
   switch (connector) {
     case 'web':    return { Icon: Globe,  label: 'Page web' };
-    case 'tavily': return { Icon: Search, label: 'Recherche' };
+    case 'tavily':
+    case 'google-news': return { Icon: Search, label: 'Recherche' };
     case 'rss':    return { Icon: Rss,    label: 'Flux RSS' };
     default:       return { Icon: Globe,  label: connector };
   }

@@ -9,7 +9,7 @@ export type SourceInput = { url?: string; query?: string; feedUrl?: string; sour
 /** The editable "target" field for a connector: web→url, tavily→query, rss→feedUrl, else none. */
 export function sourceTargetField(connector: string): 'url' | 'query' | 'feedUrl' | null {
   if (connector === 'web') return 'url';
-  if (connector === 'tavily') return 'query';
+  if (connector === 'tavily' || connector === 'google-news') return 'query';
   if (connector === 'rss') return 'feedUrl';
   return null;
 }
@@ -57,7 +57,7 @@ export function sourceSpecToRow(
     case 'web':
       return { connector: 'web', kind: 'item', purpose: 'state', input: { url: v }, label: v };
     case 'search':
-      return { connector: 'tavily', kind: 'standing', purpose: 'watch', input: { query: v }, label: v };
+      return { connector: 'google-news', kind: 'standing', purpose: 'watch', input: { query: v }, label: v };
     case 'rss':
       return { connector: 'rss', kind: 'standing', purpose: 'watch', input: { feedUrl: resolved?.feedUrl ?? v }, label: resolved?.label?.trim() || v };
     case 'youtube':

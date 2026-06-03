@@ -2,7 +2,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { db } from './db';
 import { dossiers, sources, documents, facts } from './db/schema';
 import { extract, findAdapter } from '@veille/core';
-import { discoverTavily, discoverRss, discoverYouTubeChannel } from '@veille/discovery';
+import { discoverTavily, discoverRss, discoverYouTubeChannel, discoverWatch } from '@veille/discovery';
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { freshCandidates } from './dedup';
@@ -27,7 +27,10 @@ export type StreamProgress = RefreshProgress | SynthesisProgress;
 
 type SourceRow = typeof sources.$inferSelect;
 
-async function candidatesFor(source: SourceRow, daysOverride?: number): Promise<Candidate[]> {
+async function candidatesFor(source: SourceRow, language: string, daysOverride?: number): Promise<Candidate[]> {
+  if (source.connector === 'google-news') {
+    return discoverWatch({ query: (source.input as { query: string }).query, language });
+  }
   if (source.connector === 'tavily') {
     const input = daysOverride ? { ...(source.input as object), days: daysOverride } : source.input;
     return discoverTavily(input as never);
@@ -120,7 +123,7 @@ export async function refreshDossier(
     onProgress({ type: 'source-start', label: src.label ?? src.connector });
     try {
       if (src.kind === 'standing') {
-        const cands = await candidatesFor(src, daysSince);
+        const cands = await candidatesFor(src, lang, daysSince);
         // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
         const candidates = cands.filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
         // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates mutates

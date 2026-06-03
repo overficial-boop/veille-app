@@ -336,6 +336,9 @@ textarea.field { resize: none; line-height: 1.55; }
 .rail { grid-area: rail; position: sticky; top: 72px; display: flex; flex-direction: column; gap: 1rem; }
 .dossier-main { grid-area: brief; min-width: 0; }
 .dossier-docs { grid-area: docs; min-width: 0; }
+/* The documents are cards, not reading prose — let them fill the column (no 860px cap) so the
+   card grid expands to the edge instead of leaving dead space on the right. */
+.dossier-docs .section { max-width: none; }
 /* Align the tops of the brief + documents columns (their first section's 3rem top margin). */
 .dossier-main > :first-child, .dossier-docs > :first-child { margin-top: 0; }
 @media (max-width: 1280px) {

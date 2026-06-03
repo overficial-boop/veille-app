@@ -6,7 +6,7 @@ const fakeClient = (json: object): LlmClient =>
   ({ complete: async () => ({ text: JSON.stringify(json), model: 'fake' }) } as unknown as LlmClient);
 
 describe('planDossier', () => {
-  it('tags state queries state and watch queries watch (with news topic + days)', async () => {
+  it('emits state queries as tavily and watch queries as google-news', async () => {
     const client = fakeClient({
       subjectName: "l'affaire X",
       template: 'chronology',
@@ -17,15 +17,15 @@ describe('planDossier', () => {
       watchQueries: [{ query: 'affaire X dernières actualités', rationale: 'r' }],
     });
     const plan = await planDossier({ intent: 'une chronologie de l’affaire X', language: 'fr', client });
-    const tavily = plan.sources.filter((s) => s.connector === 'tavily');
-    const state = tavily.filter((s) => s.purpose === 'state');
-    const watch = tavily.filter((s) => s.purpose === 'watch');
+    const standing = plan.sources.filter((s) => s.kind === 'standing');
+    const state = standing.filter((s) => s.purpose === 'state');
+    const watch = standing.filter((s) => s.purpose === 'watch');
     expect(state).toHaveLength(2);
     expect(watch).toHaveLength(1);
-    // watch sources are news-flavoured with a recency window
-    expect((watch[0]!.input as { topic?: string }).topic).toBe('news');
-    expect((watch[0]!.input as { days?: number }).days).toBeGreaterThan(0);
-    expect(tavily.every((s) => s.kind === 'standing')).toBe(true);
+    expect(state.every((s) => s.connector === 'tavily')).toBe(true);
+    expect(watch.every((s) => s.connector === 'google-news')).toBe(true);
+    // watch = google-news carries just the query (no topic/days)
+    expect(watch[0]!.input).toEqual({ query: 'affaire X dernières actualités' });
   });
 
   it('caps each set at maxQueries independently', async () => {

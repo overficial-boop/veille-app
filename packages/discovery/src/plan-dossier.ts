@@ -6,7 +6,7 @@ export type DossierTemplate = 'profile' | 'chronology' | 'feed';
 export type SourcePurpose = 'state' | 'watch';
 
 export type PlannedSource =
-  | { connector: 'tavily'; kind: 'standing'; input: TavilyConfig; label: string; purpose: SourcePurpose }
+  | { connector: 'tavily' | 'google-news'; kind: 'standing'; input: TavilyConfig; label: string; purpose: SourcePurpose }
   | { connector: 'web' | 'youtube' | 'pdf'; kind: 'item'; input: { url: string }; label: string; purpose: SourcePurpose };
 
 export type DossierPlan = {
@@ -27,9 +27,6 @@ export class EmptyIntentError extends Error {
 
 const URL_RE = /https?:\/\/[^\s)]+/g;
 const CHRONO_RE = /\b(chronolog\w*|timeline|affaire|frise)\b/i;
-
-// Default recency window for watch queries (days), used when refresh has no prior timestamp.
-const WATCH_DEFAULT_DAYS = 14;
 
 const QUERY_ITEM = {
   type: 'OBJECT',
@@ -115,13 +112,13 @@ export async function planDossier(input: PlanDossierInput): Promise<DossierPlan>
       .slice(0, maxQueries)
       .map((q: any) => {
         const config: TavilyConfig = { query: q.query.trim() };
+        if (purpose === 'watch') {
+          // Watch = Google News (recency + locality). Just the query — the provider is recency-native
+          // and localized at refresh time from the dossier language (no topic/days).
+          return { connector: 'google-news' as const, kind: 'standing' as const, input: config, label: q.query.trim(), purpose };
+        }
         if (typeof q.days === 'number' && q.days > 0) config.days = Math.floor(q.days);
         if (q.topic === 'news' || q.topic === 'finance' || q.topic === 'general') config.topic = q.topic;
-        if (purpose === 'watch') {
-          // Watch queries are news by nature; default the topic + a recency window the planner didn't set.
-          config.topic = config.topic ?? 'news';
-          config.days = config.days ?? WATCH_DEFAULT_DAYS;
-        }
         return { connector: 'tavily' as const, kind: 'standing' as const, input: config, label: q.query.trim(), purpose };
       });
   }

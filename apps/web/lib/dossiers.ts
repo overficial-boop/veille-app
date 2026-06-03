@@ -3,7 +3,7 @@ import { uuidv7, slugify } from '@veille/core';
 import type { Fact } from '@veille/core';
 import type { DossierPlan } from '@veille/discovery';
 import { db } from './db';
-import { dossiers, sources, facts } from './db/schema';
+import { dossiers, sources, facts, documents } from './db/schema';
 import { factToRow } from './facts-map';
 import { sourceTargetField, type SourceInput } from './source-input';
 export async function listDossiers(ownerId: string) {
@@ -166,9 +166,12 @@ export type JournalEntry = {
   documentId: string | null;
   journalReason: string | null;
   journalAt: Date;
+  title: string | null;
+  siteName: string | null;
 };
 
-/** Facts promoted to the journal, newest first. */
+/** Facts promoted to the journal, newest first. Joins the source document for its title/host so the
+ *  feed can group by document and link to its fiche. */
 export async function listJournal(dossierId: string): Promise<JournalEntry[]> {
   const rows = await db
     .select({
@@ -178,8 +181,11 @@ export async function listJournal(dossierId: string): Promise<JournalEntry[]> {
       documentId: facts.documentId,
       journalReason: facts.journalReason,
       journalAt: facts.journalAt,
+      title: documents.title,
+      siteName: documents.siteName,
     })
     .from(facts)
+    .leftJoin(documents, eq(documents.id, facts.documentId))
     .where(and(eq(facts.dossierId, dossierId), isNotNull(facts.journalAt)))
     .orderBy(desc(facts.journalAt));
   return rows.map((r) => ({ ...r, journalAt: r.journalAt as Date }));

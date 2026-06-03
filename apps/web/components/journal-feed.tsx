@@ -1,16 +1,19 @@
 import Link from 'next/link';
-import { hostOf } from '@/lib/host';
+import { ExternalLink } from 'lucide-react';
 import { formatDateFr } from '@/components/templates/types';
 import { Eyebrow } from '@/components/veille-ui';
+import { groupJournalByDocument } from '@/lib/journal';
 import type { JournalEntry } from '@/lib/dossiers';
 
 /**
- * The journal — a feed of genuinely new, vetted facts surfaced by refresh, newest first.
- * Each entry is the fact itself (text), with its publication (→ the document's fiche), the date it
- * was surfaced, and the gate's one-line reason. Rendered above the brief; hidden when empty.
+ * The journal — vetted new facts surfaced by refresh, GROUPED BY DOCUMENT (newest first). Each group
+ * is one source document: its title + publication + date, with a link to the document's fiche in
+ * Veille and to the external source, then the new facts beneath. The gate's reason is kept in the
+ * data but not shown here. Hidden when empty.
  */
 export function JournalFeed({ entries, slug }: { entries: JournalEntry[]; slug: string }) {
   if (entries.length === 0) return null;
+  const groups = groupJournalByDocument(entries);
   return (
     <section className="section journal" style={{ marginTop: 0 }}>
       <div className="section-head">
@@ -20,25 +23,32 @@ export function JournalFeed({ entries, slug }: { entries: JournalEntry[]; slug: 
         </div>
       </div>
       <ol className="journal-list">
-        {entries.map((e) => {
-          const host = hostOf(e.sourceUrl);
-          return (
-            <li key={e.id} className="journal-entry">
-              <div className="journal-date">{formatDateFr(new Date(e.journalAt))}</div>
-              <div className="journal-body">
-                <p className="journal-text">{e.text}</p>
-                {e.journalReason ? <p className="journal-reason">{e.journalReason}</p> : null}
-                <div className="journal-meta">
-                  {e.documentId ? (
-                    <Link href={`/dossier/${slug}/d/${e.documentId}`}>{host}</Link>
-                  ) : (
-                    <a href={e.sourceUrl} target="_blank" rel="noopener noreferrer">{host}</a>
-                  )}
-                </div>
+        {groups.map((g) => (
+          <li key={g.key} className="journal-group">
+            <div className="journal-ghead">
+              <div className="journal-gtitle">
+                {g.documentId ? (
+                  <Link href={`/dossier/${slug}/d/${g.documentId}`}>{g.title}</Link>
+                ) : (
+                  <span>{g.title}</span>
+                )}
               </div>
-            </li>
-          );
-        })}
+              <div className="journal-gmeta">
+                <span>{g.host}</span>
+                <span className="sep" />
+                <span>{formatDateFr(new Date(g.latestAt))}</span>
+                <a href={g.sourceUrl} target="_blank" rel="noopener noreferrer" className="journal-src">
+                  source <ExternalLink style={{ width: 11, height: 11 }} />
+                </a>
+              </div>
+            </div>
+            <ul className="journal-gfacts">
+              {g.facts.map((f) => (
+                <li key={f.id} className="journal-text">{f.text}</li>
+              ))}
+            </ul>
+          </li>
+        ))}
       </ol>
     </section>
   );

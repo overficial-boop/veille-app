@@ -645,3 +645,9 @@ details[open] > .pub-head .chev { transform: rotate(90deg); }
 .funnel .fv-kept td:first-child { color: var(--accent); }
 .funnel tr[class^="fv-rejected"] td:first-child { color: var(--ink-3); }
 .funnel .fv-suggestion td:first-child { color: var(--ink-2); }
+.diag-run-btn { font-family: var(--font-mono); font-size: var(--t-sm); padding: .4rem .9rem; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: none; color: var(--accent); cursor: pointer; }
+.diag-run-btn:disabled { opacity: .5; cursor: default; }
+.diag-knobs { display: flex; flex-wrap: wrap; gap: 1.2rem; margin: 1rem 0; font-family: var(--font-mono); font-size: var(--t-sm); color: var(--ink-2); }
+.diag-knobs input[type="range"] { accent-color: var(--accent); vertical-align: middle; }
+.diag-counts { font-family: var(--font-mono); font-size: var(--t-sm); color: var(--ink); margin: .5rem 0; }
+.diag-env { font-family: var(--font-mono); font-size: var(--t-xs); background: var(--surface-2); padding: .6rem .8rem; border-radius: var(--radius-sm); color: var(--ink-2); white-space: pre; }

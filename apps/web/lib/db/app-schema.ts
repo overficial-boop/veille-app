@@ -47,6 +47,15 @@ export const dossierUpdates = pgTable('dossier_updates', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const refreshRuns = pgTable('refresh_runs', {
+  id: uuid('id').primaryKey(),
+  dossierId: uuid('dossier_id').notNull().references(() => dossiers.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  params: jsonb('params').$type<{ recencyDays: number; relevanceKeepFloor: number; candidateScoreFloor: number }>().notNull(),
+  counts: jsonb('counts').$type<{ raw: number; kept: number; suggestion: number; rejected: number }>().notNull(),
+  funnel: jsonb('funnel').notNull(),
+});
+
 export const documents = pgTable('documents', {
   id: uuid('id').primaryKey(),
   dossierId: uuid('dossier_id').notNull().references(() => dossiers.id, { onDelete: 'cascade' }),

@@ -20,6 +20,7 @@ export function TopBar({ email }: TopBarProps) {
       <div className="topbar-spacer" />
       <div className="topbar-acct">
         <ThemeToggle />
+        <a href="/admin" className="topbar-email" style={{ textDecoration: 'none' }}>Diagnostics</a>
         <span className="topbar-email">{email}</span>
         <SignOutButton />
       </div>

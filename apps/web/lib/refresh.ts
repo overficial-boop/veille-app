@@ -7,6 +7,8 @@ import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { freshCandidates } from './dedup';
 import { isWithinDays, isRecentCandidate } from './temporal';
+import { classifyDiscovery, type FunnelEntry } from './diagnostics';
+import { insertRefreshRun } from './refresh-runs';
 import { upsertDocument, extractFactsForDocument } from './documents';
 import { listJournal, promoteFactsToJournal } from './dossiers';
 import { selectJournalWorthy, journalTextsOf } from './journal';
@@ -51,7 +53,7 @@ async function processCandidate(
   url: string,
   candPublishedAt: string | undefined,
   candTitle: string | undefined,
-): Promise<'kept' | 'suggestion'> {
+): Promise<{ status: 'kept' | 'suggestion'; relevance: number; reason: string }> {
   let captured = '';
   await extract(url, { language: ctx.language, contentOnly: true, onContent: (t) => { captured = t; } });
   const rel = captured
@@ -72,7 +74,7 @@ async function processCandidate(
     relevance: rel.score,
     relevanceReason: rel.reason,
   });
-  return status;
+  return { status, relevance: rel.score, reason: rel.reason };
 }
 
 export async function refreshDossier(
@@ -116,6 +118,7 @@ export async function refreshDossier(
   let kept = 0;
   let suggested = 0;
   const newKeptUrls: string[] = [];
+  const runFunnel: FunnelEntry[] = [];
 
   for (const src of srcRows) {
     const needs = src.kind === 'standing' || !src.lastExtractedAt || opts.force;
@@ -126,42 +129,38 @@ export async function refreshDossier(
         const cands = await candidatesFor(src, lang, daysSince);
         // Drop YouTube Shorts — datacenter IPs rarely get usable transcripts for them.
         const candidates = cands.filter((c) => !/youtube\.com\/shorts\//i.test(c.url));
-        // Narrow by Tavily relevance score + cap BEFORE freshCandidates: freshCandidates mutates
-        // seenUrls (marks what it returns as seen). Filtering first means only the URLs we actually
-        // mine get marked seen; weaker ones can resurface on a later refresh. Unscored candidates
-        // (RSS / YouTube-channel) pass the floor; only scored (Tavily) ones must clear it.
-        const ranked = [...candidates]
-          .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-          .slice(0, candidatesPerSource);
-        // On refresh, the user-chosen window (the slider) decides recency:
-        //  - recencyDays === 0 → "depuis le dernier rafraîchissement": only items newer than the
-        //    last refresh (keep undated). Strict "what's new since I last looked".
-        //  - recencyDays > 0   → a ROLLING N-day window (keep undated), so the same-day re-refresh
-        //    and catch-up both work. Either way seenUrls dedup prevents re-pulling.
-        // (No slider value → fall back to the config default, for programmatic callers.)
+        // Stage candidates (score floor → rank cut → recency → seen-dedup), recording each
+        // dropped one in the funnel for the diagnostics tool. On refresh the slider decides recency:
+        //  - recencyDays 0 → only items newer than the last refresh (keep undated);
+        //  - recencyDays N → a rolling N-day window (keep undated). Either way seenUrls dedups.
         const recencyDays = opts.recencyDays ?? cfg.refreshRecencyDays;
-        const recencyFiltered = phase !== 'refresh'
-          ? ranked
-          : recencyDays > 0
-            ? ranked.filter((c) => isWithinDays(c.publishedAt, new Date(), recencyDays))
-            : ranked.filter((c) => isRecentCandidate(c.publishedAt, lastRefresh));
-        // Process candidates one at a time, emitting a document frame per candidate.
-        for (const c of freshCandidates(recencyFiltered, seenUrls)) {
-          if (!findAdapter({ kind: 'url', url: c.url })) continue;
+        const now = new Date();
+        const isRecent = (p?: string) =>
+          phase !== 'refresh' ? true : recencyDays > 0 ? isWithinDays(p, now, recencyDays) : isRecentCandidate(p, lastRefresh);
+        const label = src.label ?? src.connector;
+        const { funnel: preFunnel, toProcess } = classifyDiscovery(candidates, {
+          query: label, candidateScoreFloor: cfg.candidateScoreFloor, perSource: candidatesPerSource, isRecent, seenUrls,
+        });
+        runFunnel.push(...preFunnel);
+        const fe = (c: { url: string; title?: string; publishedAt?: string; siteName?: string; score?: number }, verdict: FunnelEntry['verdict'], relevance?: number, relevanceReason?: string): FunnelEntry =>
+          ({ query: label, url: c.url, title: c.title, publishedAt: c.publishedAt, siteName: c.siteName, providerScore: c.score, verdict, relevance, relevanceReason });
+        for (const c of toProcess) {
+          seenUrls.add(c.url); // mark seen up-front so a later source dedups even if this one fails
+          if (!findAdapter({ kind: 'url', url: c.url })) { runFunnel.push(fe(c, 'rejected:no-content')); continue; }
           try {
-            const status = await processCandidate(ctx, c.url, c.publishedAt, c.title);
-            if (status === 'kept') { kept++; newKeptUrls.push(c.url); } else suggested++;
-            onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: c.title ?? c.url, status, kept, total: kept + suggested });
+            const r = await processCandidate(ctx, c.url, c.publishedAt, c.title);
+            if (r.status === 'kept') { kept++; newKeptUrls.push(c.url); } else suggested++;
+            runFunnel.push(fe(c, r.status, r.relevance, r.reason));
+            onProgress({ type: 'document', sourceLabel: label, title: c.title ?? c.url, status: r.status, kept, total: kept + suggested });
           } catch {
-            /* skip a bad candidate URL, keep going */
+            runFunnel.push(fe(c, 'rejected:no-content'));
           }
         }
       } else {
         const url = (src.input as { url: string }).url;
         const title = src.label ?? undefined;
         try {
-          const status = await processCandidate(ctx, url, undefined, title);
+          const { status } = await processCandidate(ctx, url, undefined, title);
           if (status === 'kept') { kept++; newKeptUrls.push(url); } else suggested++;
           onProgress({ type: 'document', sourceLabel: src.label ?? src.connector, title: title ?? url, status, kept, total: kept + suggested });
         } catch {
@@ -173,6 +172,19 @@ export async function refreshDossier(
       // leave lastExtractedAt unset so it retries next refresh
       onProgress({ type: 'source-error', label: src.label ?? src.connector, message: e instanceof Error ? e.message : String(e) });
     }
+  }
+
+  // Record this refresh's discovery funnel for the diagnostics tool (best-effort — never fail a
+  // refresh on logging).
+  if (phase === 'refresh') {
+    const rejected = runFunnel.filter((f) => f.verdict.startsWith('rejected')).length;
+    try {
+      await insertRefreshRun(dossierId, {
+        params: { recencyDays: opts.recencyDays ?? cfg.refreshRecencyDays, relevanceKeepFloor: cfg.relevanceKeepFloor, candidateScoreFloor: cfg.candidateScoreFloor },
+        counts: { raw: runFunnel.length, kept, suggestion: suggested, rejected },
+        funnel: runFunnel,
+      });
+    } catch { /* diagnostics are best-effort */ }
   }
 
   // Journal: on refresh, extract facts from the docs newly kept this run, then let the LLM gate
@@ -249,7 +261,7 @@ export async function pullAdHoc(
   for (const c of freshCandidates(ranked, seenUrls)) {
     if (!findAdapter({ kind: 'url', url: c.url })) continue;
     try {
-      const status = await processCandidate(ctx, c.url, c.publishedAt, c.title);
+      const { status } = await processCandidate(ctx, c.url, c.publishedAt, c.title);
       if (status === 'kept') kept++; else suggested++;
     } catch {
       /* skip a bad candidate URL, keep going */

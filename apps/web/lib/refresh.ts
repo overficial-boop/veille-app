@@ -6,7 +6,7 @@ import { discoverTavily, discoverRss, discoverYouTubeChannel, discoverWatch } fr
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { freshCandidates } from './dedup';
-import { isRecentCandidate } from './temporal';
+import { isWithinDays } from './temporal';
 import { upsertDocument, extractFactsForDocument } from './documents';
 import { listJournal, promoteFactsToJournal } from './dossiers';
 import { selectJournalWorthy, journalTextsOf } from './journal';
@@ -134,10 +134,14 @@ export async function refreshDossier(
           .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .slice(0, candidatesPerSource);
-        // On refresh: drop candidates published on/before the last refresh; keep undated ones
-        // (benefit of the doubt). On assemble (lastRefresh=null) every candidate passes.
+        // On refresh: keep candidates published within a ROLLING window (keep undated). The window
+        // is at least cfg.refreshRecencyDays, widened to span the gap since the last refresh so an
+        // infrequently-refreshed dossier still catches up. Anchoring to a window (not the exact
+        // last-refresh moment) means re-refreshing the same day still surfaces recent articles;
+        // freshCandidates/seenUrls dedup prevents re-pulling what was already added. Assemble: all pass.
+        const windowDays = Math.max(cfg.refreshRecencyDays, daysSince ?? 0);
         const recencyFiltered = phase === 'refresh'
-          ? ranked.filter((c) => isRecentCandidate(c.publishedAt, lastRefresh))
+          ? ranked.filter((c) => isWithinDays(c.publishedAt, new Date(), windowDays))
           : ranked;
         // Process candidates one at a time, emitting a document frame per candidate.
         for (const c of freshCandidates(recencyFiltered, seenUrls)) {

@@ -5,6 +5,9 @@ export {
   discoverRss,
   discoverTavily,
   discoverYouTubeChannel,
+  discoverGoogleNews,
+  discoverGrounded,
+  discoverWatch,
 } from './providers/index.js';
 export { summarizeUrl } from './summarize.js';
 export type { SummarizeOptions, SummarizeResult } from './summarize.js';

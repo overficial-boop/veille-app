@@ -19,3 +19,6 @@ export async function runDiscoveryProvider(tool: DiscoveryTool): Promise<Candida
 export { discoverRss } from './rss.js';
 export { discoverTavily } from './tavily.js';
 export { discoverYouTubeChannel } from './youtube-channel.js';
+export { discoverGoogleNews } from './google-news.js';
+export { discoverGrounded } from './grounded-search.js';
+export { discoverWatch } from './watch.js';

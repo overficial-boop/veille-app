@@ -1,5 +1,6 @@
 import { selectLlmClient } from '@veille/core';
 import type { LlmClient } from '@veille/core';
+import { hostOf } from './host';
 
 // The novelty/importance gate for the journal. Kept DB-free so the pure helpers (prompt + parse)
 // are unit-testable without the env/db chain. selectLlmClient is read at call time, not import.
@@ -10,6 +11,39 @@ export type JournalSelection = { factId: string; reason: string };
 /** Texts already shown in the journal, for the gate's "already known" baseline. */
 export function journalTextsOf(entries: { text: string }[]): string[] {
   return entries.map((e) => e.text);
+}
+
+export type JournalGroup = {
+  key: string;
+  documentId: string | null;
+  title: string;
+  host: string;
+  sourceUrl: string;
+  latestAt: Date;
+  facts: { id: string; text: string }[];
+};
+
+type JournalLike = {
+  id: string; text: string; sourceUrl: string; documentId: string | null;
+  title: string | null; siteName: string | null; journalAt: Date;
+};
+
+/** PURE. Group promoted facts by their source document (fallback: source URL), preserving the
+ *  newest-first order of the input. Each group carries the document title/host + its first (latest)
+ *  date, so the feed can show one block per document with links to its fiche + source. */
+export function groupJournalByDocument(entries: JournalLike[]): JournalGroup[] {
+  const map = new Map<string, JournalGroup>();
+  for (const e of entries) {
+    const key = e.documentId ?? e.sourceUrl;
+    let g = map.get(key);
+    if (!g) {
+      const host = (e.siteName ?? '').trim() || hostOf(e.sourceUrl);
+      g = { key, documentId: e.documentId, title: (e.title ?? '').trim() || host, host, sourceUrl: e.sourceUrl, latestAt: e.journalAt, facts: [] };
+      map.set(key, g);
+    }
+    g.facts.push({ id: e.id, text: e.text });
+  }
+  return [...map.values()];
 }
 
 const GATE_SCHEMA = {

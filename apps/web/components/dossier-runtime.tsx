@@ -137,6 +137,8 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
   const [phase, setPhase] = React.useState<Phase>('idle');
   const [lines, setLines] = React.useState<ProgressLine[]>([]);
   const [synth, setSynth] = React.useState<SynthLine | null>(null);
+  // Recency window for Rafraîchir: 0 = only what's new since the last refresh; N = the last N days.
+  const [recencyDays, setRecencyDays] = React.useState(0);
   // The running tally across the whole run: total documents seen and how many were kept.
   const [docTotal, setDocTotal] = React.useState(0);
   const [keptTotal, setKeptTotal] = React.useState(0);
@@ -331,7 +333,7 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
             variant="soft"
             size="sm"
             icon={RefreshCw}
-            onClick={() => run(`/api/dossiers/${slug}/refresh`)}
+            onClick={() => run(`/api/dossiers/${slug}/refresh?days=${recencyDays}`)}
             disabled={running || isPending}
           >
             {running ? 'Rafraîchissement…' : 'Rafraîchir'}
@@ -358,6 +360,20 @@ export function DossierRuntime({ slug, status, hasBrief, sources }: Props) {
             </Btn>
           )}
         </div>
+
+        <label className="refresh-window" title="Fenêtre de récence pour le rafraîchissement">
+          <span className="rw-label">Fenêtre</span>
+          <input
+            type="range"
+            min={0}
+            max={30}
+            step={1}
+            value={recencyDays}
+            onChange={(e) => setRecencyDays(Number(e.target.value))}
+            disabled={running}
+          />
+          <span className="rw-val">{recencyDays === 0 ? 'Nouveautés' : `${recencyDays} j`}</span>
+        </label>
 
         {showPanel ? (
           <div className="progress">

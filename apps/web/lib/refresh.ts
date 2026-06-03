@@ -6,7 +6,7 @@ import { discoverTavily, discoverRss, discoverYouTubeChannel, discoverWatch } fr
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
 import { freshCandidates } from './dedup';
-import { isWithinDays } from './temporal';
+import { isWithinDays, isRecentCandidate } from './temporal';
 import { upsertDocument, extractFactsForDocument } from './documents';
 import { listJournal, promoteFactsToJournal } from './dossiers';
 import { selectJournalWorthy, journalTextsOf } from './journal';
@@ -77,7 +77,7 @@ async function processCandidate(
 
 export async function refreshDossier(
   dossierId: string,
-  opts: { phase?: 'assemble' | 'refresh'; force?: boolean; language?: string; onProgress?: (p: RefreshProgress) => void } = {},
+  opts: { phase?: 'assemble' | 'refresh'; force?: boolean; language?: string; recencyDays?: number; onProgress?: (p: RefreshProgress) => void } = {},
 ): Promise<{ kept: number; suggested: number; total: number }> {
   registerAllAdapters();
   // Depth knobs come from config. Only the candidate cap varies by phase — assemble goes
@@ -134,15 +134,18 @@ export async function refreshDossier(
           .filter((c) => c.score === undefined || c.score >= cfg.candidateScoreFloor)
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
           .slice(0, candidatesPerSource);
-        // On refresh: keep candidates published within a ROLLING window (keep undated). The window
-        // is at least cfg.refreshRecencyDays, widened to span the gap since the last refresh so an
-        // infrequently-refreshed dossier still catches up. Anchoring to a window (not the exact
-        // last-refresh moment) means re-refreshing the same day still surfaces recent articles;
-        // freshCandidates/seenUrls dedup prevents re-pulling what was already added. Assemble: all pass.
-        const windowDays = Math.max(cfg.refreshRecencyDays, daysSince ?? 0);
-        const recencyFiltered = phase === 'refresh'
-          ? ranked.filter((c) => isWithinDays(c.publishedAt, new Date(), windowDays))
-          : ranked;
+        // On refresh, the user-chosen window (the slider) decides recency:
+        //  - recencyDays === 0 → "depuis le dernier rafraîchissement": only items newer than the
+        //    last refresh (keep undated). Strict "what's new since I last looked".
+        //  - recencyDays > 0   → a ROLLING N-day window (keep undated), so the same-day re-refresh
+        //    and catch-up both work. Either way seenUrls dedup prevents re-pulling.
+        // (No slider value → fall back to the config default, for programmatic callers.)
+        const recencyDays = opts.recencyDays ?? cfg.refreshRecencyDays;
+        const recencyFiltered = phase !== 'refresh'
+          ? ranked
+          : recencyDays > 0
+            ? ranked.filter((c) => isWithinDays(c.publishedAt, new Date(), recencyDays))
+            : ranked.filter((c) => isRecentCandidate(c.publishedAt, lastRefresh));
         // Process candidates one at a time, emitting a document frame per candidate.
         for (const c of freshCandidates(recencyFiltered, seenUrls)) {
           if (!findAdapter({ kind: 'url', url: c.url })) continue;

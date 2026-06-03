@@ -352,6 +352,12 @@ textarea.field { resize: none; line-height: 1.55; }
 .runtime-top { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
 .runtime-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; margin-top: 1rem; }
 .runtime-actions .btn { width: 100%; }
+/* Recency-window slider under the refresh button. */
+.refresh-window { display: flex; align-items: center; gap: .5rem; margin-top: .7rem; font-family: var(--font-mono); font-size: var(--t-mono); letter-spacing: .03em; color: var(--ink-3); }
+.refresh-window .rw-label { flex: 0 0 auto; }
+.refresh-window input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+.refresh-window input[type="range"]:disabled { cursor: default; opacity: .5; }
+.refresh-window .rw-val { flex: 0 0 auto; min-width: 6.5ch; text-align: right; color: var(--ink-2); }
 
 .progress { margin-top: 1.1rem; border-top: 1px solid var(--line); padding-top: 1rem; display: flex; flex-direction: column; gap: 0; }
 .progress-global { display: block; white-space: nowrap; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--ink); margin-bottom: .75rem; letter-spacing: .01em; }

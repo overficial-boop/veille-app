@@ -10,6 +10,7 @@ export type RefreshConfig = {
   journalEnabled: boolean;
   journalMaxPerRefresh: number;
   refreshRecencyDays: number;
+  candidateConcurrency: number;
 };
 
 // candidateScoreFloor 0.4 was empirically calibrated against live dossiers (the "relevance pass");
@@ -24,6 +25,9 @@ const DEFAULTS: RefreshConfig = {
   journalEnabled: true,
   journalMaxPerRefresh: 5,
   refreshRecencyDays: 7,
+  // Candidates within a source are independent (fetch content + 1 relevance LLM call each), so
+  // process several at once. Bounded to stay friendly to the LLM provider's rate limits.
+  candidateConcurrency: 5,
 };
 
 /** Positive finite number from an env string, else the default. Fractional values pass
@@ -46,6 +50,7 @@ export function resolveRefreshConfig(env: Record<string, string | undefined>): R
     journalEnabled: env.VEILLE_JOURNAL_ENABLED === undefined ? DEFAULTS.journalEnabled : env.VEILLE_JOURNAL_ENABLED !== 'false',
     journalMaxPerRefresh: num(env.VEILLE_JOURNAL_MAX, DEFAULTS.journalMaxPerRefresh),
     refreshRecencyDays: num(env.VEILLE_REFRESH_RECENCY_DAYS, DEFAULTS.refreshRecencyDays),
+    candidateConcurrency: num(env.VEILLE_CANDIDATE_CONCURRENCY, DEFAULTS.candidateConcurrency),
   };
 }
 

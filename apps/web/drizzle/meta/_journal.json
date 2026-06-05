@@ -99,6 +99,13 @@
       "when": 1780491210574,
       "tag": "0013_brief_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1780684320959,
+      "tag": "0014_secret_shinobi_shaw",
+      "breakpoints": true
     }
   ]
 }

@@ -459,9 +459,8 @@ git commit -m "feat(jobs): job store (enqueue/claim/progress/finish/reap)"
 
 - [ ] **Step 1: Implement the worker**
 
-Create `apps/web/lib/jobs/worker.ts`:
+Create `apps/web/lib/jobs/worker.ts` (per-job internal parallelism lives inside the engine, so this file needs no `mapWithConcurrency`):
 ```ts
-import { mapWithConcurrency } from '@veille/core';
 import type { StreamProgress } from '../refresh';
 import { describeProgress, pushStep, emptyProgress, throttleProgress, type JobProgress } from './policy';
 import { claimNextJob, writeProgress, touchHeartbeat, finishJob, reapOrphans, type JobRow } from './store';

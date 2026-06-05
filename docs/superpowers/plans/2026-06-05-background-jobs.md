@@ -290,7 +290,7 @@ export function describeProgress(frame: StreamProgress): Described | null {
       };
     case 'synthesis':
       if (frame.state !== 'start') return null;
-      if (frame.phase === 'journal') return { phase: 'analyzing', headline: 'Analyse des nouveautés…', label: 'Analyse des nouveautés…' };
+      // 'journal' synthesis isn't a SynthesisProgress phase — the dedicated `journal` frame narrates it.
       if (frame.phase === 'update') return { phase: 'writing', headline: 'Rédaction de la mise à jour…', label: 'Rédaction de la mise à jour…' };
       return { phase: 'writing', headline: 'Rédaction de la synthèse…', label: 'Rédaction de la synthèse…' };
     case 'journal':

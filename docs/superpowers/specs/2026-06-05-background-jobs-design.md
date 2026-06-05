@@ -27,7 +27,7 @@ jobs {
   type         text               // JobType
   status       text               // JobStatus, default 'queued'
   params       jsonb              // handler input: { phase, recencyDays?, scope?, autoBrief? }
-  progress     jsonb              // latest: { phase, current, total, label, message }
+  progress     jsonb              // JobProgress (see §6): headline + counts + rolling named-step feed
   error        text null
   attempts     integer default 0
   heartbeat_at timestamptz null   // bumped while running → liveness for reap
@@ -50,7 +50,9 @@ Keep the "pure helpers cannot import `./db`" rule (env validates at import → Z
 
 - **`lib/jobs/policy.ts`** — DB-free, pure, vitest-tested:
   - `shouldReap(job, now, staleMs): boolean` — `status==='running' && heartbeat_at < now - staleMs`.
-  - `throttleProgress(last, next, minIntervalMs): boolean` — whether to write this progress frame (rate-limit DB writes to ~1/s).
+  - `throttleProgress(last, next, minIntervalMs): boolean` — whether to flush to the DB now (rate-limit writes to ~1–2/s) — but a frame is **always** appended to the in-memory step buffer first, so no named action is dropped from the feed (see §6).
+  - `describeProgress(frame): { phase, headline, label }` — maps each `StreamProgress` frame to **French user-facing text** (the narration). Pure + table-driven + fully unit-tested (this is where "name every action" lives).
+  - `pushStep(progress, described, cap): JobProgress` — append the described step to the rolling feed (cap ~40), update `headline`/`phase`/`current`/`total`.
   - `JOB_HANDLERS` dispatch map shape (type → which pipeline + how params map) — the mapping is data; the actual handler functions are injected by the worker so this stays db-free.
   - Job/progress TS types.
 - **`lib/jobs/store.ts`** — DB-bound CRUD/SQL:
@@ -94,10 +96,44 @@ The `assemble` / `brief` / `refresh` routes stop `await`-ing the pipeline in an 
 
 The old SSE `ReadableStream` plumbing in these three routes is removed.
 
-### 6. Progress — polling endpoint + client hook
+### 6. Progress — a fully narrated activity feed (polled)
 
-- **`GET /api/dossiers/[slug]/job`** → `getActiveOrLatestJob`, owner-authorized via the dossier → `{ id, type, status, progress, error }` (or `null` if none).
-- The client `DossierRuntime` replaces its `EventSource` usage with a **poll hook**: while a job is `queued|running`, poll ~1.5s; render a progress bar + the latest line (`progress.label`/`message`, `current/total`). On `done` → `router.refresh()` to pull the finished dossier; on `failed` → show the error + a "réessayer" that re-enqueues.
+**Requirement:** during creation the user must *feel* the volume of work — every action named, so a multi-minute wait reads as "a lot is being done for me," not "is this stuck?"
+
+**Progress shape (`progress` jsonb):**
+```ts
+type JobStep = { at: string; label: string };        // ISO time + French narration
+type JobProgress = {
+  phase: 'planning' | 'searching' | 'reading' | 'analyzing' | 'writing' | 'done';
+  headline: string;                                   // e.g. "Analyse des documents — 3 / 21"
+  current?: number; total?: number;                   // drives the bar when known
+  steps: JobStep[];                                   // rolling, newest-last, capped ~40
+};
+```
+
+**Narration — `describeProgress(frame)` maps every emitted frame to text** (subject language; French examples):
+
+| frame | phase | step label (named action) |
+|---|---|---|
+| job start | `planning` | "Préparation de la veille…" |
+| `source-start { label }` | `searching` | "Recherche : {label}" |
+| `document { title, status }` | `reading` | "Lecture et évaluation : {title}" (+ "— retenu" / "— écarté") |
+| `brief-doc { index, total, title }` | `analyzing` | "Analyse du document {index}/{total} : {title}" |
+| `synthesis { state:'start' }` | `writing` | "Rédaction de la synthèse…" |
+| `source-error { label }` | (unchanged) | "Source indisponible : {label}" (non-fatal, shown) |
+| job done | `done` | "Veille prête." |
+
+`headline`/`current`/`total` track the dominant phase (e.g. `reading` shows "{kept} sources retenues", `analyzing` shows "{index} / {total}"). Every frame is **appended to `steps`** before throttling, so even rapid concurrent frames (the parallel enrichment pool) each leave a named line — the feed visibly *streams* activity. DB writes are throttled (~1–2/s, plus an immediate flush on phase change) so the row isn't hammered.
+
+**Endpoint:** `GET /api/dossiers/[slug]/job` → `getActiveOrLatestJob`, owner-authorized → `{ id, type, status, progress, error }` or `null`.
+
+**Client (`DossierRuntime`):** replaces `EventSource` with a **poll hook** (~1.5s while `queued|running`). The creation view renders:
+- a **headline + progress bar** (indeterminate until `total` is known),
+- a **live activity feed** — the `steps` list, console-like, newest at the bottom, greyed timestamps — this is the "lots happening" indicator,
+- a calm reassurance line tied to the whole point: **"Vous pouvez fermer cet onglet — la veille se construit en arrière-plan."**
+
+On `done` → `router.refresh()`; on `failed` → show `error` + a "Réessayer" that re-enqueues (idempotent).
+
 - The existing StrictMode deferred-start logic is no longer needed for correctness (the job runs server-side regardless), but the page still **auto-enqueues** an assemble job if it loads a `building` dossier with no active job (self-heal for any dossier left mid-build by the old path).
 
 ### 7. Scope
@@ -107,7 +143,7 @@ The old SSE `ReadableStream` plumbing in these three routes is removed.
 
 ### 8. Testing
 
-- **Pure (vitest, `lib/jobs/policy.test.ts`):** `shouldReap` (stale vs fresh vs non-running), `throttleProgress` (interval gating), the dispatch-map shape, progress/job type round-trips.
+- **Pure (vitest, `lib/jobs/policy.test.ts`):** `shouldReap` (stale vs fresh vs non-running), `throttleProgress` (interval gating), `describeProgress` (every frame type → expected phase + French label, incl. status suffix and the start/done sentinels), `pushStep` (append, cap at ~40, headline/current/total update), the dispatch-map shape.
 - **DB-bound (manual / light integration):** the `SKIP LOCKED` claim (two concurrent claims never grab the same job), singleton dedup (second enqueue returns the first), reap re-queues a stale running job. Exercised against the dev DB; not in the pure suite (which can't import `./db`).
 - **Manual end-to-end:** create a dossier → close the tab → reopen → it completed; kill `next dev` mid-job → restart → the job reaps + resumes to completion.
 

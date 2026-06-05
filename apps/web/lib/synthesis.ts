@@ -1,10 +1,15 @@
 import type { Fact } from '@veille/core';
 import { eq, and, inArray } from 'drizzle-orm';
 import { dossiers, facts as factsTable, documents as documentsTable } from './db/schema';
-import { selectLlmClient } from '@veille/core';
+import { selectLlmClient, mapWithConcurrency } from '@veille/core';
 import { hostOf } from './host';
 import type { BriefRef } from './citations';
 export type { BriefRef };
+
+// How many kept documents to enrich (core + facts) at once during brief generation. Each doc is a
+// few sequential LLM calls; documents are independent, so a small pool slashes wall-clock without
+// hammering the LLM provider's rate limits. Override with BRIEF_DOC_CONCURRENCY.
+const BRIEF_DOC_CONCURRENCY = Math.max(1, Number(process.env.BRIEF_DOC_CONCURRENCY) || 5);
 
 export type SourceGroup = { host: string; facts: Fact[] };
 
@@ -177,16 +182,19 @@ export async function composeDossier(
         .where(and(eq(documentsTable.dossierId, dossierId), eq(documentsTable.status, 'kept')));
     }
 
-    // Idempotently ensure facts for each target document that has none yet.
+    // Idempotently ensure core + facts for each target document. Run several documents at once:
+    // each doc is 2–3 sequential LLM calls, but documents are independent, so a concurrency pool
+    // turns the old N×(serial) wall-clock into ~N/limit. Counter is bumped on completion so the
+    // "Analyse i/N" progress still climbs monotonically despite out-of-order finishes.
     if (targetDocs.length > 0) {
       const { extractFactsForDocument, ensureDocumentCore } = await import('./documents');
-      let i = 0;
-      for (const doc of targetDocs) {
-        i += 1;
-        onProgress({ type: 'brief-doc', index: i, total: targetDocs.length, title: doc.title ?? doc.url });
+      let done = 0;
+      await mapWithConcurrency(targetDocs, BRIEF_DOC_CONCURRENCY, async (doc) => {
         await ensureDocumentCore({ id: dossier.id, language: dossier.language ?? null }, doc);
         await extractFactsForDocument(dossier, doc);
-      }
+        done += 1;
+        onProgress({ type: 'brief-doc', index: done, total: targetDocs.length, title: doc.title ?? doc.url });
+      });
     }
 
     const targetDocIds = new Set(targetDocs.map((d) => d.id));

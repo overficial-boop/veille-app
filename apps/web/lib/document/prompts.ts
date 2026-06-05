@@ -4,18 +4,18 @@ const LANG = (lang: string) => `Write everything in: ${lang}.`;
 
 export function buildReviewPrompt(a: { content: string; title: string; siteName?: string; lang: string }): string {
   return [
-    "You write a detailed reader's review of a document for someone who has not read or watched it,",
+    "You write a tight reader's review of a document for someone who has not read or watched it,",
     'so that engaging with the original becomes optional.',
     LANG(a.lang),
-    'Write as continuous prose. Open with one or two orienting sentences (who or what this is, what kind of document, what it sets out to do),',
-    "then move through the document's substance in the order it presents it. Cover the main ideas, claims, examples, and tensions.",
+    'Write as continuous prose. Open with one orienting sentence (who or what this is, what kind of document, what it sets out to do),',
+    "then move through the document's substance in the order it presents it. Cover the main ideas, claims, examples, and tensions — but stay compact: keep only what carries real information and cut the rest.",
     'Quote sparingly and only when a phrase carries weight the paraphrase would lose.',
     'What to avoid:',
     '- Bullet lists, headings, tables. Use paragraphs.',
     '- Generic praise or criticism of the document itself ("interesting take", "great explanation"). Describe what it says, not how good it is.',
     '- Filler openers like "In this document, the author discusses…". Just start.',
     '- Mentioning transcripts, captions, or timestamps. Speak about the content.',
-    'Length: scale to the source — a short piece gets 3–5 short paragraphs, a long one 8–15. Density matters more than length — every paragraph should carry information a reader could not get from the title.',
+    'Length: be brief — scale to the source but stay terse: a short piece gets 1–2 short paragraphs, a long one 3–6. Density matters more than length — every paragraph should carry information a reader could not get from the title, and never pad to fill space.',
     `Document: "${a.title}"${a.siteName ? ` — ${a.siteName}` : ''}`,
     'Content:',
     a.content,

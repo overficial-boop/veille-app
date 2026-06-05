@@ -1,7 +1,7 @@
 import { eq, and, inArray } from 'drizzle-orm';
 import { db } from './db';
 import { dossiers, sources, documents, facts } from './db/schema';
-import { extract, findAdapter } from '@veille/core';
+import { extract, findAdapter, mapWithConcurrency } from '@veille/core';
 import { discoverTavily, discoverRss, discoverYouTubeChannel, discoverWatch } from '@veille/discovery';
 import type { Candidate } from '@veille/discovery';
 import { registerAllAdapters } from './adapters';
@@ -144,9 +144,13 @@ export async function refreshDossier(
         runFunnel.push(...preFunnel);
         const fe = (c: { url: string; title?: string; publishedAt?: string; siteName?: string; score?: number }, verdict: FunnelEntry['verdict'], relevance?: number, relevanceReason?: string): FunnelEntry =>
           ({ query: label, url: c.url, title: c.title, publishedAt: c.publishedAt, siteName: c.siteName, providerScore: c.score, verdict, relevance, relevanceReason });
-        for (const c of toProcess) {
-          seenUrls.add(c.url); // mark seen up-front so a later source dedups even if this one fails
-          if (!findAdapter({ kind: 'url', url: c.url })) { runFunnel.push(fe(c, 'rejected:no-content')); continue; }
+        // Mark every candidate seen up-front so a later source dedups even if this one fails.
+        for (const c of toProcess) seenUrls.add(c.url);
+        // Candidates are independent (fetch content + 1 relevance LLM call each) → process a pool at
+        // once. JS is single-threaded, so the shared counters/arrays below mutate atomically between
+        // awaits; only the emit order is non-deterministic, which the UI tolerates.
+        await mapWithConcurrency(toProcess, cfg.candidateConcurrency, async (c) => {
+          if (!findAdapter({ kind: 'url', url: c.url })) { runFunnel.push(fe(c, 'rejected:no-content')); return; }
           try {
             const r = await processCandidate(ctx, c.url, c.publishedAt, c.title);
             if (r.status === 'kept') { kept++; newKeptUrls.push(c.url); } else suggested++;
@@ -155,7 +159,7 @@ export async function refreshDossier(
           } catch {
             runFunnel.push(fe(c, 'rejected:no-content'));
           }
-        }
+        });
       } else {
         const url = (src.input as { url: string }).url;
         const title = src.label ?? undefined;

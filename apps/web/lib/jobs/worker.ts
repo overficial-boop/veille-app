@@ -80,6 +80,7 @@ export function startJobWorker(): void {
   const g = globalThis as { __veille_jobWorker?: boolean };
   if (g.__veille_jobWorker) return;
   g.__veille_jobWorker = true;
+  console.log(`[jobs] worker started (concurrency ${CONCURRENCY})`);
   void reapOrphans(STALE_MS).catch(() => {});
   for (let i = 0; i < CONCURRENCY; i++) void workerLoop();
 }

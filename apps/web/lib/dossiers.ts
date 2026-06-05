@@ -6,6 +6,7 @@ import { db } from './db';
 import { dossiers, sources, facts, documents } from './db/schema';
 import { factToRow } from './facts-map';
 import { sourceTargetField, type SourceInput } from './source-input';
+import { enqueueJob } from './jobs/store';
 export async function listDossiers(ownerId: string) {
   const rows = await db
     .select()
@@ -64,6 +65,7 @@ export async function createDossier(ownerId: string, intent: string, plan: Dossi
       label: s.label,
     })) as (typeof sources.$inferInsert)[],
   );
+  await enqueueJob(id, 'assemble', { phase: 'assemble', autoBrief });
   return { id, slug };
 }
 

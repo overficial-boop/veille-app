@@ -18,8 +18,7 @@
 - `apps/web/lib/jobs/policy.ts` — DB-free pure helpers: types, `describeProgress`, `pushStep`, `shouldReap`, `throttleProgress`, `PHASE_ORDER`.
 - `apps/web/lib/jobs/policy.test.ts` — vitest for the above.
 - `apps/web/lib/jobs/store.ts` — DB CRUD: `enqueueJob`, `claimNextJob`, `writeProgress`, `finishJob`, `reapOrphans`, `getActiveOrLatestJob`.
-- `apps/web/lib/jobs/worker.ts` — `startJobWorker()` (loop + dispatch + heartbeat + boot reap).
-- `apps/web/instrumentation.ts` — Next boot hook → `startJobWorker()`.
+- `apps/web/lib/jobs/worker.ts` — `startJobWorker()` (loop + dispatch + heartbeat + boot reap), called idempotently from the job routes (NOT instrumentation — see Task 5).
 - `apps/web/app/api/dossiers/[slug]/job/route.ts` — `GET` job status for polling.
 
 **Modify:**
@@ -562,35 +561,30 @@ git commit -m "feat(jobs): in-process worker (claim/dispatch/narrate/heartbeat/r
 
 ---
 
-## Task 5: `instrumentation.ts` — start the worker on boot
+## Task 5: Start the worker from the job routes (NOT instrumentation)
+
+> **Correction (applied during execution):** the original plan started the worker via `apps/web/instrumentation.ts` `register()`. That FAILS: Next does not apply `serverExternalPackages` to the instrumentation bundle, so the worker's transitive `jsdom`/`pg` get bundled and `jsdom`'s `require("http")` (via `agent-base`) can't resolve — a fatal compile error that 500s every route. `nodejs` route bundles externalize those packages correctly. So instead, call the idempotent `startJobWorker()` from the job route handlers. No `instrumentation.ts` file.
 
 **Files:**
-- Create: `apps/web/instrumentation.ts`
+- Modify: the four job routes from Task 6 (`…/job`, `…/assemble`, `…/refresh`, `…/brief`) — add `import { startJobWorker } from '@/lib/jobs/worker'` and call `startJobWorker();` as the first line of each handler.
 
-- [ ] **Step 1: Add the instrumentation hook**
+- [ ] **Step 1: Keep the startup log in `startJobWorker()`**
 
-Create `apps/web/instrumentation.ts`:
-```ts
-// Next runs register() once per server process (next dev / next start), in the Node runtime.
-// We start the background job worker here so it lives for the life of the process, not a request.
-export async function register() {
-  if (process.env.NEXT_RUNTIME !== 'nodejs') return; // skip the edge runtime
-  const { startJobWorker } = await import('./lib/jobs/worker');
-  startJobWorker();
-}
-```
+In `apps/web/lib/jobs/worker.ts`, after the `globalThis` guard, keep a one-line `console.log(\`[jobs] worker started (concurrency ${CONCURRENCY})\`)` — useful ops observability and confirms the on-demand start.
 
-> Next 15 enables `instrumentation.ts` by default (no `experimental.instrumentationHook` flag needed). The `NEXT_RUNTIME` guard ensures the worker (which uses `pg`) only starts in the Node runtime.
+- [ ] **Step 2: Add `startJobWorker()` to each job route**
 
-- [ ] **Step 2: Verify it loads (dev already running on :3000)**
+In each of `…/job/route.ts`, `…/assemble/route.ts`, `…/refresh/route.ts`, `…/brief/route.ts`, add the import and call `startJobWorker();` at the top of the handler. Because the client always polls `…/job` (on mount + after every enqueue), the worker is alive whenever there's work. The `globalThis` guard makes repeated calls a no-op.
 
-The dev server hot-reloads. Confirm the worker started exactly once: it has no startup log yet — add a temporary `console.log('[jobs] worker started', CONCURRENCY)` inside `startJobWorker` after the guard, save, watch the dev terminal show it **once**, then remove the log. (Do not restart via `next build`.)
+- [ ] **Step 3: Verify (fresh dev boot)**
 
-- [ ] **Step 3: Commit**
+Restart dev (kill `:3000`, relaunch). Confirm: NO `[jobs] worker started` at boot; after the first `GET …/job` request, the log shows `[jobs] worker started (concurrency 2)` and routes return 401 (auth) — NOT 500. `grep -c '⨯' devlog` is 0.
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add apps/web/instrumentation.ts
-git commit -m "feat(jobs): start the worker via instrumentation register()"
+git add apps/web/app/api/dossiers apps/web/lib/jobs/worker.ts
+git commit -m "feat(jobs): start worker from routes (serverExternalPackages doesn't cover instrumentation)"
 ```
 
 ---

@@ -83,8 +83,8 @@ claim: UPDATE jobs SET status='running', started_at=now(), heartbeat_at=now(), a
 
 ### 4. Startup & restart survival
 
-- Start the worker **once per process** via Next's `instrumentation.ts` `register()` hook, guarded by a `globalThis.__veille_jobWorker` flag so dev HMR / multiple imports don't spawn duplicates. `register()` runs in the Node runtime on `next dev` and `next start`.
-- On startup, **reap orphans** once: `reapOrphans(staleMs ≈ 2 min)` — any `running` job whose heartbeat is stale (its process died mid-run on a deploy/crash) is reset to `queued`. The worker re-claims it and the **idempotent handlers resume**: `upsertDocument` skips existing URLs, `ensureDocumentCore`/`extractFactsForDocument` short-circuit on done docs, the brief is re-synthesized. With heartbeats every ~15s and a 2-min threshold, a *live* job is never falsely reaped.
+- Start the worker **once per process** via an idempotent `startJobWorker()` (guarded by a `globalThis.__veille_jobWorker` flag so repeated calls / dev HMR don't spawn duplicates), called from the **job route handlers** (the `GET …/job` status poll + the three enqueue routes). **Not** from `instrumentation.ts`: Next does not apply `serverExternalPackages` to the instrumentation bundle, so pulling the engine (`jsdom`/`pg`) through the worker there fails to compile (`Can't resolve 'http'` via `jsdom → agent-base`). The `nodejs` route bundles externalize those packages correctly — the same way the old SSE routes imported the engine. Since the client always polls `…/job` (on mount and after every enqueue), the worker is alive whenever there is work. *(Trade-off vs. instrumentation: the worker starts on the first job-route request after a boot, not at boot. Fine for M1; M2's cron scheduler will be the always-on starter.)*
+- On first start (and thus after a restart, on the first job-route request), **reap orphans** once: `reapOrphans(staleMs ≈ 2 min)` — any `running` job whose heartbeat is stale (its process died mid-run on a deploy/crash) is reset to `queued`. The worker re-claims it and the **idempotent handlers resume**: `upsertDocument` skips existing URLs, `ensureDocumentCore`/`extractFactsForDocument` short-circuit on done docs, the brief is re-synthesized. With heartbeats every ~15s and a 2-min threshold, a *live* job is never falsely reaped.
 
 ### 5. Triggering — routes enqueue, no longer run inline
 
@@ -150,7 +150,8 @@ On `done` → `router.refresh()`; on `failed` → show `error` + a "Réessayer" 
 ## Risks / caveats
 
 - **Single VPS / single process** is assumed (matches deploy: `next start`). `SKIP LOCKED` already makes the design correct for >1 worker/process if that ever changes.
-- **`instrumentation.ts` double-start in dev:** mitigated by the `globalThis` guard. If the worker somehow runs twice, `SKIP LOCKED` + the singleton index keep it correct (just wasted polling).
+- **Worker double-start (dev HMR / many routes calling `startJobWorker`):** mitigated by the `globalThis` guard. If the worker somehow runs twice, `SKIP LOCKED` + the singleton index keep it correct (just wasted polling).
+- **Worker not started via `instrumentation.ts`:** that bundle doesn't honor `serverExternalPackages`, so the engine's `jsdom`/`pg` fail to compile there. Started from the `nodejs` job routes instead (see §4).
 - **Reap threshold vs. genuinely slow ops:** the ~15s heartbeat must fire even during a long single LLM call — the periodic tick (not just `onProgress`) guarantees this. If an op could exceed 2 min between *any* heartbeat, raise the threshold; with the tick it won't.
 - **Vestigial:** the assemble/brief/refresh SSE routes' streaming code is deleted, not left inert (they're replaced by enqueue). The `StreamProgress` type stays (the worker still produces the same progress frames, now written to the row).
 

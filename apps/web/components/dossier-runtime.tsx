@@ -21,8 +21,6 @@ import {
   addSourceAction,
   adHocPullAction,
   removeSourceAction,
-  regenerateBriefAction,
-  generateBriefAction,
   updateSourceAction,
 } from '@/app/dossier/[slug]/actions';
 import { formatDateFr } from '@/components/templates/types';

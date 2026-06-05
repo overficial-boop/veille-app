@@ -22,21 +22,29 @@ export async function enqueueJob(dossierId: string, type: JobType, params: JobPa
         .where(and(eq(jobs.dossierId, dossierId), inArray(jobs.status, ACTIVE)))
         .limit(1);
       if (active) return { id: active.id, deduped: true };
+      // Benign narrow race: the active job finished between the failed insert and this select, so
+      // there's no active job to return. Rethrow — the caller surfaces a transient error the user
+      // can simply retry; not worth a retry-loop for this window.
     }
     throw e;
   }
 }
 
-/** Atomically claim the oldest queued job. Race-free across workers/processes via SKIP LOCKED. */
+/** Atomically claim the oldest queued job. Race-free across workers/processes via SKIP LOCKED.
+ *  The raw `db.execute` result returns snake_case pg columns (Drizzle's camelCase mapping only
+ *  happens through the query builder), so we RETURN just the id and re-read the row via select() —
+ *  a PK lookup that yields a correctly-mapped JobRow the worker can read (job.dossierId etc.). */
 export async function claimNextJob(): Promise<JobRow | null> {
   const res = await db.execute(sql`
     UPDATE jobs SET status = 'running', started_at = now(), heartbeat_at = now(), attempts = attempts + 1
     WHERE id = (
       SELECT id FROM jobs WHERE status = 'queued' ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1
     )
-    RETURNING *
+    RETURNING id
   `);
-  const row = (res.rows as JobRow[] | undefined)?.[0];
+  const claimedId = (res.rows as { id: string }[] | undefined)?.[0]?.id;
+  if (!claimedId) return null;
+  const [row] = await db.select().from(jobs).where(eq(jobs.id, claimedId));
   return row ?? null;
 }
 

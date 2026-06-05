@@ -76,7 +76,7 @@ claim: UPDATE jobs SET status='running', started_at=now(), heartbeat_at=now(), a
 ```
 
 - `SKIP LOCKED` makes the claim race-free even if N>1 (or, later, more than one process).
-- Dispatch by `type` → call the existing `refreshDossier(dossierId, { phase, … })` (assemble/refresh) or `composeDossier(dossierId, { mode:'brief', … })` (brief), passing an `onProgress` that calls `writeProgress` **throttled** (~1s) — which doubles as the heartbeat. `assemble` with `params.autoBrief` chains a `brief` job at the end (enqueue), exactly as the SSE route does today.
+- Dispatch by `type` → call the existing `refreshDossier(dossierId, { phase, … })` (assemble/refresh) or `composeDossier(dossierId, { mode:'brief', … })` (brief), passing an `onProgress` that calls `writeProgress` **throttled** (~1s) — which doubles as the heartbeat. `assemble` with `params.autoBrief` runs the brief **inline at the end of the same job** (not a separate enqueue): the singleton index forbids a second active job for the dossier, so a `brief` enqueue while assemble is still `running` would just dedupe to the assemble job and never run. One job covering both phases keeps the active-job window correct. *(Resume caveat: a crash mid-brief re-queues the assemble job, which re-runs `refreshDossier` first — cheap, since `upsertDocument` dedups existing docs — before reaching the brief again.)*
 - Long single LLM calls between progress frames: a lightweight periodic **heartbeat tick** (~15s) keeps `heartbeat_at` fresh so a live job is never reaped.
 - On success → `finishJob('done')`; on throw → `finishJob('failed', message)`. **No automatic retry in v1** (a failed job is surfaced; the user can re-trigger, which is idempotent). Retry/backoff is a later additive change.
 - When no job is claimable, sleep (~1.5s) and poll again. (Simple polling loop — no LISTEN/NOTIFY needed at this scale.)
@@ -132,7 +132,7 @@ type JobProgress = {
 - a **live activity feed** — the `steps` list, console-like, newest at the bottom, greyed timestamps — this is the "lots happening" indicator,
 - a calm reassurance line tied to the whole point: **"Vous pouvez fermer cet onglet — la veille se construit en arrière-plan."**
 
-On `done` → `router.refresh()`; on `failed` → show `error` + a "Réessayer" that re-enqueues (idempotent).
+On `done` → `router.refresh()`; on `failed` → show `error`. Retry needs no dedicated button: a `failed` job is not active, so the existing **Rafraîchir / Réécrire / Générer le brief** buttons re-enable and re-enqueue (idempotent).
 
 - The existing StrictMode deferred-start logic is no longer needed for correctness (the job runs server-side regardless), but the page still **auto-enqueues** an assemble job if it loads a `building` dossier with no active job (self-heal for any dossier left mid-build by the old path).
 

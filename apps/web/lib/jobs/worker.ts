@@ -33,12 +33,12 @@ async function runJob(job: JobRow): Promise<void> {
     const now = Date.now();
     if (throttleProgress(lastFlush, now, FLUSH_MS)) {
       lastFlush = now;
-      void writeProgress(job.id, progress); // fire-and-forget; ordering not critical
+      void writeProgress(job.id, progress).catch(() => {}); // best-effort; never reject unhandled
     }
   };
 
   // Periodic heartbeat so a long single LLM call (between frames) is never reaped.
-  const beat = setInterval(() => void touchHeartbeat(job.id), HEARTBEAT_MS);
+  const beat = setInterval(() => void touchHeartbeat(job.id).catch(() => {}), HEARTBEAT_MS);
   try {
     if (job.type === 'assemble' || job.type === 'refresh') {
       const phase = job.type === 'assemble' ? 'assemble' : 'refresh';

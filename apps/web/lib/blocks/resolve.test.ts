@@ -27,6 +27,12 @@ describe('topoOrder', () => {
     const b = def({ id: 'b', prerequisites: [{ kind: 'block', blockId: 'not-here' }] });
     expect(topoOrder([b]).map((d) => d.id)).toEqual(['b']);
   });
+
+  it('dedupes duplicate ids (first occurrence wins) and still orders correctly', () => {
+    const a = def({ id: 'a' });
+    const b = def({ id: 'b', prerequisites: [{ kind: 'block', blockId: 'a' }] });
+    expect(topoOrder([b, a, b, a]).map((d) => d.id)).toEqual(['a', 'b']);
+  });
 });
 
 describe('resolveInputs', () => {
@@ -72,5 +78,13 @@ describe('resolveInputs', () => {
     const d = def({ id: 'a', prerequisites: [{ kind: 'raw-content' }] });
     const r = await resolveInputs(d, { dossierId: 'D' }, loaders());
     expect(r).toEqual({ missing: expect.stringContaining('raw-content') });
+  });
+
+  it('fingerprint is deterministic for identical loader state', async () => {
+    const d = def({ id: 'a', prerequisites: [{ kind: 'raw-content' }, { kind: 'fact-pool' }] });
+    const r1 = await resolveInputs(d, { dossierId: 'D', documentId: 'doc1' }, loaders());
+    const r2 = await resolveInputs(d, { dossierId: 'D', documentId: 'doc1' }, loaders());
+    if ('missing' in r1 || 'missing' in r2) throw new Error('should resolve');
+    expect(r1.fingerprint).toBe(r2.fingerprint);
   });
 });

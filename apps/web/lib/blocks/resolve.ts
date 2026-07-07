@@ -13,12 +13,15 @@ export type ResolveTarget = { dossierId: string; documentId?: string };
 export type Resolved = { inputs: ResolvedInputs; fingerprint: string };
 export type ResolveResult = Resolved | { missing: string };
 
-/** Kahn topological order over block/all-items edges, restricted to the given set. Assumes the
- *  registry graph is validated (acyclic) at boot; edges leaving the set are ignored. */
+/** Kahn topological order over block/all-items edges, restricted to the given set. Duplicate ids
+ *  are deduped (first occurrence wins) — callers may pass one entry per (block, target) pair.
+ *  Assumes the registry graph is validated (acyclic) at boot; edges leaving the set are ignored. */
 export function topoOrder(defs: BlockDef[]): BlockDef[] {
-  const inSet = new Map(defs.map((d) => [d.id, d]));
+  const seen = new Set<string>();
+  const unique = defs.filter((d) => (seen.has(d.id) ? false : (seen.add(d.id), true)));
+  const inSet = new Map(unique.map((d) => [d.id, d]));
   const deps = new Map<string, Set<string>>();
-  for (const d of defs) {
+  for (const d of unique) {
     const s = new Set<string>();
     for (const p of d.prerequisites) {
       if ((p.kind === 'block' || p.kind === 'all-items') && inSet.has(p.blockId)) s.add(p.blockId);
@@ -27,8 +30,8 @@ export function topoOrder(defs: BlockDef[]): BlockDef[] {
   }
   const out: BlockDef[] = [];
   const done = new Set<string>();
-  while (out.length < defs.length) {
-    const ready = defs.filter((d) => !done.has(d.id) && [...deps.get(d.id)!].every((x) => done.has(x)));
+  while (out.length < unique.length) {
+    const ready = unique.filter((d) => !done.has(d.id) && [...deps.get(d.id)!].every((x) => done.has(x)));
     if (ready.length === 0) break; // unreachable if registry is acyclic; guard anyway
     for (const d of ready) { out.push(d); done.add(d.id); }
   }

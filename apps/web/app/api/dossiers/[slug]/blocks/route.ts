@@ -36,6 +36,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: `le bloc « ${def.name} » ne supporte pas la portée ${scope}` }, { status: 400 });
 
   const { id, existed } = await attachBlock(dossier.id, blockId, scope);
-  for (const hiddenId of hiddenPrereqIds(def)) await attachBlock(dossier.id, hiddenId, scope);
+  for (const hiddenId of hiddenPrereqIds(def)) {
+    const hiddenDef = getBlock(hiddenId);
+    // Only attach scope-compatible hidden prerequisites; a mismatch would create an unrunnable instance.
+    if (hiddenDef && (hiddenDef.scope === 'both' || hiddenDef.scope === scope)) await attachBlock(dossier.id, hiddenId, scope);
+  }
   return NextResponse.json({ instanceId: id, existed }, { status: existed ? 200 : 201 });
 }

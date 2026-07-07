@@ -70,6 +70,7 @@ export async function resolveInputs(def: BlockDef, target: ResolveTarget, loader
       if (!target.documentId) return { missing: 'item-facts requires an item target' };
       const { facts } = await loaders.itemFacts(target.documentId);
       inputs.itemFacts = { facts };
+      // Id-only fingerprint is sound: facts are insert-only in this codebase (never edited in place).
       prints.push(contentFingerprint(facts.map((f) => f.id).join(',')));
     } else if (p.kind === 'block') {
       const cached = await loaders.cachedOutput(target.dossierId, p.blockId, targetKey);

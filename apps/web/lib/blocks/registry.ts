@@ -46,3 +46,21 @@ export function validateRegistry(): string[] {
   for (const id of registry.keys()) visit(id, []);
   return errors;
 }
+
+/** Hidden blocks reachable from def via block-prerequisite edges — auto-attached alongside it. */
+export function hiddenPrereqIds(def: BlockDef): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (d: BlockDef) => {
+    for (const p of d.prerequisites) {
+      if (p.kind !== 'block' || seen.has(p.blockId)) continue;
+      seen.add(p.blockId);
+      const ref = registry.get(p.blockId);
+      if (!ref) continue;
+      if (ref.hidden) out.push(ref.id);
+      walk(ref);
+    }
+  };
+  walk(def);
+  return out;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { registerBlock, getBlock, listBlocks, validateRegistry, __clearRegistryForTests } from './registry';
+import { registerBlock, getBlock, listBlocks, validateRegistry, hiddenPrereqIds, __clearRegistryForTests } from './registry';
 import type { BlockDef } from './types';
 
 const gen: BlockDef['generate'] = async () => ({ content: 'x', citations: [] });
@@ -55,5 +55,13 @@ describe('registry', () => {
     registerBlock(def({ id: 'a' }));
     registerBlock(def({ id: 'b', prerequisites: [{ kind: 'block', blockId: 'a' }] }));
     expect(validateRegistry()).toEqual([]);
+  });
+
+  it('hiddenPrereqIds walks block edges and returns hidden blocks transitively', () => {
+    registerBlock(def({ id: 'bundle', scope: 'item', hidden: true }));
+    registerBlock(def({ id: 'mid', prerequisites: [{ kind: 'block', blockId: 'bundle' }] }));
+    registerBlock(def({ id: 'leaf', prerequisites: [{ kind: 'block', blockId: 'mid' }] }));
+    expect(hiddenPrereqIds(getBlock('leaf')!)).toEqual(['bundle']);
+    expect(hiddenPrereqIds(getBlock('bundle')!)).toEqual([]);
   });
 });

@@ -61,3 +61,8 @@ DAG proof: `item-analysis → exec-summary → tldr` (bundle → free extraction
 - **Bundle JSON robustness:** LLM may emit imperfect JSON despite jsonSchema; extraction of a missing section must fail-soft (recorded as failed for that block, batch continues — existing runner semantics).
 - **Prompt size:** transcript cap (24k chars) + facts; watch token limits on long videos — reuse the existing CONTENT_CAP pattern.
 - **Section quality drift vs dedicated prompts:** accepted (the coherence/cost trade was decided consciously); revisit per-section if dogfooding shows a weak section.
+
+## 8. Post-implementation notes (final review, 2026-07-07)
+
+- **Pre-2a instances:** dossiers whose extraction-family instances predate 2a lack an `item-analysis` instance; runs record misses until the block is re-POSTed (idempotent attach re-runs the auto-attach loop). Decision: **accept the self-heal, no backfill** — dev DB only, and the single affected dossier already has its bundle from the smoke run.
+- **Deferred to Plan 3 (UI):** GET blocks returns hidden instances/outputs unfiltered (~18KB bundle JSON in the payload — UI must filter, or move filtering server-side); POST allows attaching a hidden block by id (add a `def.hidden` guard when the library UI lands). Also: cap the numbered-facts list in the bundle prompt if per-document fact counts grow; consider memoizing `cachedOutput` reads per run if extraction counts rise.

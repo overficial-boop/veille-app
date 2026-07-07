@@ -47,9 +47,9 @@ The graph is a DAG, validated at attach time (no cycles, no unsatisfiable scope)
 
 ## 3. Execution & staleness
 
-- **One instance run = one job** on the durable jobs system (merged 2026-07-07): enqueue → claim → generate → cache → narrate in the activity feed.
-- **Scheduling by graph:** a job is enqueued only when its prerequisites are fresh or their jobs finished; the worker walks the DAG by "enqueue what's ready" — no separate orchestrator.
-- **Staleness is visible, never silent.** Fact-pool version bumps on refresh; dependents show a "stale — refresh?" chip. Policy: page blocks default `auto-on-refresh`; item blocks and expensive derivations default `on-demand` (run on first tap, then cache) — simpleyt's economics.
+- **One batch `blocks` job per run** on the durable jobs system (merged 2026-07-07): a run enqueues one job that executes all requested instances in DAG order, narrating each block as a step. *(Amended from "one instance run = one job" at implementation: the jobs table enforces one active job per dossier, so per-instance jobs would break that invariant. Orchestration is contained in `lib/blocks/run.ts` + one worker branch — reversible later.)*
+- **Scheduling by graph:** within the batch, instances execute in topological order over their prerequisites; unsatisfiable prerequisites are recorded as misses and the batch continues — no separate orchestrator.
+- **Staleness is visible, never silent.** Refresh marks cached outputs stale; a stale output whose input fingerprint still matches is *re-verified* (flag cleared, no regeneration) — the fingerprint, not the flag, is the source of truth. Dependents show a "stale — refresh?" chip. Policy: page blocks default `auto-on-refresh`; item blocks and expensive derivations default `on-demand` (run on first tap, then cache) — simpleyt's economics. *(Engine note: the `auto-on-refresh` execution path — auto-re-enqueue after refresh — is deferred to Plan 2; the policy field exists and refresh marks stale, but nothing re-runs automatically yet.)*
 - **Cost rules:** eager work = only what's mounted on the page; item analysis is paid once per item per block; derivations reuse cached parents.
 
 ## 4. UI — recto / verso
@@ -103,3 +103,13 @@ Stage 1 adds no new *capability* beyond Elaborate and TL;DR — it is a redistri
 - **Cost visibility** — per-block LLM spend should be observable (the jobs table already records runs; surface per-dossier counts on the verso side).
 - **Flip implementation** (gesture/animation) — motion design parked; Stage 1 ships a plain toggle if needed.
 - **DB-registered third-party blocks, block sharing/library growth** — future; the code registry must not preclude it.
+
+### Deferred by Plan 1 (block engine, shipped 2026-07-07) — pick up in Plans 2-3
+- **`auto-on-refresh` execution** — policy field exists, refresh marks stale, but nothing auto-re-enqueues page blocks yet (see §3 note).
+- **`items` primitive** — §2 lists it as a first-class input (needed by the Feed block); `BlockInput` doesn't include it yet.
+- **Derivation citation inheritance** — a derivation block (TL;DR) can't carry its parent's citations forward: the resolver forwards only cached content, not citations. Needs `ResolvedInputs.blocks` to carry `{content, citations}` — resolver-level change.
+- **Fact-pool loader bounds** — `dbLoaders().factPool` loads the whole pool unbounded; cap/order it before the first fact-pool block ships. `facts.dossier_id` also lacks an index (FKs don't auto-index in Postgres).
+- **Batch worker occupancy** — a large batch (N items × M blocks) holds one of the 2 worker slots for its whole serial run; chunk or bound before multi-user load.
+- **All-failed batches finish `done`** — consider `failed` when `ran + skipped === 0 && failed > 0`.
+- **Cross-type job dedupe UX** — enqueueing a blocks run during an active refresh returns the refresh job's id (systemic, pre-existing); Plan 3's UI must surface `deduped` + job type honestly.
+- Minor: redundant `block_outputs_instance_idx` (composite unique already leads with instanceId); French hardcoded in tldr prompt ("une seule phrase").

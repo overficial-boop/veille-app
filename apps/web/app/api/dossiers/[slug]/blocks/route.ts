@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { getDossier } from '@/lib/dossiers';
-import { listBlocks, getBlock } from '@/lib/blocks';
+import { listBlocks, getBlock, hiddenPrereqIds } from '@/lib/blocks';
 import { attachBlock, listInstances, listOutputs } from '@/lib/blocks/store';
 
 export const runtime = 'nodejs';
@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   if (!dossier) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   const [instances, outputs] = await Promise.all([listInstances(dossier.id), listOutputs(dossier.id)]);
-  const library = listBlocks().map((b) => ({ id: b.id, name: b.name, scope: b.scope, staleness: b.staleness }));
+  const library = listBlocks().filter((b) => !b.hidden).map((b) => ({ id: b.id, name: b.name, scope: b.scope, staleness: b.staleness }));
   return NextResponse.json({ instances, outputs, library });
 }
 
@@ -36,5 +36,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     return NextResponse.json({ error: `le bloc « ${def.name} » ne supporte pas la portée ${scope}` }, { status: 400 });
 
   const { id, existed } = await attachBlock(dossier.id, blockId, scope);
+  for (const hiddenId of hiddenPrereqIds(def)) {
+    const hiddenDef = getBlock(hiddenId);
+    // Only attach scope-compatible hidden prerequisites; a mismatch would create an unrunnable instance.
+    if (hiddenDef && (hiddenDef.scope === 'both' || hiddenDef.scope === scope)) await attachBlock(dossier.id, hiddenId, scope);
+  }
   return NextResponse.json({ instanceId: id, existed }, { status: existed ? 200 : 201 });
 }

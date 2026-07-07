@@ -104,5 +104,11 @@ export function dbLoaders(dossierId: string): BlockLoaders {
         .where(and(eq(blockInstances.dossierId, dossierId), eq(blockInstances.blockId, blockId), eq(blockOutputs.stale, false)));
       return rows.filter((r) => r.targetKey !== 'page');
     },
+    // Scoped by dossierId (from the closure), same cross-tenant rule as the document loader.
+    async itemFacts(documentId) {
+      const rows = await db.select({ id: facts.id, text: facts.text, sourceUrl: facts.sourceUrl, sourcePassage: facts.sourcePassage })
+        .from(facts).where(and(eq(facts.documentId, documentId), eq(facts.dossierId, dossierId)));
+      return { facts: rows };
+    },
   };
 }

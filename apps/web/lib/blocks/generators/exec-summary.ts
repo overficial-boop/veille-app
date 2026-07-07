@@ -3,13 +3,10 @@ import type { BlockDef } from '../types';
 
 export const CONTENT_CAP = 24_000; // chars of source content sent to the model
 
-const LANGUAGE_NAME: Record<string, string> = { fr: 'français', en: 'English' };
-
 export function buildExecSummaryPrompt(a: { title: string; url: string; content: string; language: string }): string {
-  const lang = LANGUAGE_NAME[a.language] ?? a.language;
   const content = a.content.length > CONTENT_CAP ? `${a.content.slice(0, CONTENT_CAP)}\n[…tronqué]` : a.content;
   return `You are an expert analyst of published content (videos, articles).
-Write an executive summary in ${lang}.
+Write an executive summary in ${a.language}.
 
 ## Item
 - Title: ${a.title}

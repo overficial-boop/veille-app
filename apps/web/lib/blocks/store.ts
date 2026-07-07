@@ -79,6 +79,8 @@ export function dbLoaders(): BlockLoaders {
       }).from(documents).where(eq(documents.id, documentId));
       return doc ? { ...doc, title: doc.title ?? '', siteName: doc.siteName ?? undefined } : null;
     },
+    // At most one row can match: page instances only write targetKey='page', item instances only
+    // write document-id targetKeys (enforced by runBlocksJob's targetKey assignment, not the DB).
     async cachedOutput(dossierId, blockId, targetKey) {
       const [row] = await db.select({ content: blockOutputs.content, fingerprint: blockOutputs.fingerprint })
         .from(blockOutputs)

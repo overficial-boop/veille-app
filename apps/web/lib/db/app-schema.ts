@@ -120,3 +120,30 @@ export const jobs = pgTable('jobs', {
   // At most ONE active (queued|running) job per dossier — enforced by the DB.
   uniqueIndex('jobs_one_active_per_dossier_idx').on(t.dossierId).where(sql`status in ('queued','running')`),
 ]);
+
+export const blockInstances = pgTable('block_instances', {
+  id: uuid('id').primaryKey(),
+  dossierId: uuid('dossier_id').notNull().references(() => dossiers.id, { onDelete: 'cascade' }),
+  blockId: text('block_id').notNull(),           // registry id — definitions live in code
+  scope: text('scope').$type<'page' | 'item'>().notNull(),
+  position: integer('position').notNull().default(0), // page-stack order; item blocks ignore it
+  config: jsonb('config').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  // One instance of a block per dossier per scope (re-attach = no-op).
+  uniqueIndex('block_instances_dossier_block_scope_idx').on(t.dossierId, t.blockId, t.scope),
+]);
+
+export const blockOutputs = pgTable('block_outputs', {
+  id: uuid('id').primaryKey(),
+  instanceId: uuid('instance_id').notNull().references(() => blockInstances.id, { onDelete: 'cascade' }),
+  targetKey: text('target_key').notNull().default('page'), // 'page' | a documents.id (item scope)
+  content: text('content').notNull(),                      // markdown
+  citations: jsonb('citations').$type<{ factId?: string; url: string }[]>().notNull(),
+  fingerprint: text('fingerprint').notNull(),              // combined prerequisite fingerprint at generation time
+  stale: boolean('stale').notNull().default(false),        // set by refresh; cleared on regeneration
+  generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('block_outputs_instance_target_idx').on(t.instanceId, t.targetKey),
+  index('block_outputs_instance_idx').on(t.instanceId),
+]);

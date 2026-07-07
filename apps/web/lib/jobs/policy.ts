@@ -1,6 +1,6 @@
 import type { StreamProgress } from '../refresh'; // type-only → erased at runtime, never loads ./db
 
-export type JobType = 'assemble' | 'brief' | 'refresh';
+export type JobType = 'assemble' | 'brief' | 'refresh' | 'blocks';
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed';
 
 /** Handler input persisted on the job row. */
@@ -9,6 +9,8 @@ export type JobParams = {
   recencyDays?: number;
   scope?: string[];
   autoBrief?: boolean;
+  instanceIds?: string[]; // blocks job: which instances (default: all of the dossier)
+  targetKeys?: string[];  // blocks job: document ids for item-scope runs
 };
 
 export type JobPhase = 'planning' | 'searching' | 'reading' | 'analyzing' | 'writing' | 'done';

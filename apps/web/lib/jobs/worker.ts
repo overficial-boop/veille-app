@@ -43,12 +43,15 @@ async function runJob(job: JobRow): Promise<void> {
     if (job.type === 'assemble' || job.type === 'refresh') {
       const phase = job.type === 'assemble' ? 'assemble' : 'refresh';
       await refreshDossier(job.dossierId, { phase, language, recencyDays: job.params.recencyDays, onProgress });
-      const { markStaleForDossier } = await import('../blocks/store');
-      const stale = await markStaleForDossier(job.dossierId);
-      if (stale > 0) {
-        progress = pushStep(progress, { phase: 'analyzing', headline: 'Blocs à rafraîchir', label: `${stale} bloc(s) à rafraîchir` }, new Date().toISOString(), STEP_CAP);
-        void writeProgress(job.id, progress).catch(() => {});
-      }
+      // Best-effort: stale-marking must never fail an otherwise-successful refresh.
+      try {
+        const { markStaleForDossier } = await import('../blocks/store');
+        const stale = await markStaleForDossier(job.dossierId);
+        if (stale > 0) {
+          progress = pushStep(progress, { phase: 'analyzing', headline: 'Blocs à rafraîchir', label: `${stale} bloc(s) à rafraîchir` }, new Date().toISOString(), STEP_CAP);
+          void writeProgress(job.id, progress).catch(() => {});
+        }
+      } catch { /* non-fatal: outputs stay unmarked until the next refresh */ }
       if (job.type === 'assemble' && job.params.autoBrief) {
         await composeDossier(job.dossierId, { mode: 'brief', language, onProgress });
       }

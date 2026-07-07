@@ -18,7 +18,7 @@ export function validateRegistry(): string[] {
   const errors: string[] = [];
   for (const def of registry.values()) {
     for (const p of def.prerequisites) {
-      if ((p.kind === 'raw-content' || p.kind === 'item-metadata') && !canRun(def, 'item'))
+      if ((p.kind === 'raw-content' || p.kind === 'item-metadata' || p.kind === 'item-facts') && !canRun(def, 'item'))
         errors.push(`block "${def.id}": ${p.kind} requires item scope`);
       if (p.kind === 'all-items') {
         if (!canRun(def, 'page')) errors.push(`block "${def.id}": all-items requires page scope`);

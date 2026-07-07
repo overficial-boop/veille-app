@@ -12,6 +12,7 @@ const loaders = (over: Partial<BlockLoaders> = {}): BlockLoaders => ({
   document: async () => ({ content: 'transcript text', title: 'T', url: 'https://x', siteName: 'X', publishedAt: null }),
   cachedOutput: async () => ({ content: 'cached summary', fingerprint: 'abc' }),
   allOutputs: async () => [{ targetKey: 'doc1', content: 'sum1' }],
+  itemFacts: async () => ({ facts: [{ id: 'f1', text: 't', sourceUrl: 'u', sourcePassage: 'p' }] }),
   ...over,
 });
 
@@ -78,6 +79,15 @@ describe('resolveInputs', () => {
     const d = def({ id: 'a', prerequisites: [{ kind: 'raw-content' }] });
     const r = await resolveInputs(d, { dossierId: 'D' }, loaders());
     expect(r).toEqual({ missing: expect.stringContaining('raw-content') });
+  });
+
+  it('resolves item-facts for an item target and reports missing on page target', async () => {
+    const d = def({ id: 'a', prerequisites: [{ kind: 'item-facts' }] });
+    const r = await resolveInputs(d, { dossierId: 'D', documentId: 'doc1' }, loaders());
+    if ('missing' in r) throw new Error('should resolve');
+    expect(r.inputs.itemFacts?.facts).toHaveLength(1);
+    const p = await resolveInputs(d, { dossierId: 'D' }, loaders());
+    expect(p).toEqual({ missing: expect.stringContaining('item-facts') });
   });
 
   it('fingerprint is deterministic for identical loader state', async () => {

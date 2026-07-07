@@ -37,6 +37,11 @@ describe('registry', () => {
     expect(validateRegistry().some((e) => /raw-content/.test(e))).toBe(true);
   });
 
+  it('validate: item-facts only on item-capable blocks', () => {
+    registerBlock(def({ id: 'p', scope: 'page', prerequisites: [{ kind: 'item-facts' }] }));
+    expect(validateRegistry().some((e) => /item-facts/.test(e))).toBe(true);
+  });
+
   it('validate: all-items only on page-capable blocks, referencing an item-capable block', () => {
     registerBlock(def({ id: 'leaf', scope: 'item' }));
     registerBlock(def({ id: 'agg', scope: 'page', prerequisites: [{ kind: 'all-items', blockId: 'leaf' }] }));

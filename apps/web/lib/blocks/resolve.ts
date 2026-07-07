@@ -7,6 +7,7 @@ export type BlockLoaders = {
   document: (documentId: string) => Promise<{ content: string | null; title: string; url: string; siteName?: string; publishedAt: Date | string | null } | null>;
   cachedOutput: (dossierId: string, blockId: string, targetKey: string) => Promise<{ content: string; fingerprint: string } | null>;
   allOutputs: (dossierId: string, blockId: string) => Promise<{ targetKey: string; content: string }[]>;
+  itemFacts: (documentId: string) => Promise<{ facts: { id: string; text: string; sourceUrl: string; sourcePassage: string }[] }>;
 };
 
 export type ResolveTarget = { dossierId: string; documentId?: string };
@@ -65,6 +66,11 @@ export async function resolveInputs(def: BlockDef, target: ResolveTarget, loader
         };
         prints.push(contentFingerprint(`${doc.title}|${doc.url}`));
       }
+    } else if (p.kind === 'item-facts') {
+      if (!target.documentId) return { missing: 'item-facts requires an item target' };
+      const { facts } = await loaders.itemFacts(target.documentId);
+      inputs.itemFacts = { facts };
+      prints.push(contentFingerprint(facts.map((f) => f.id).join(',')));
     } else if (p.kind === 'block') {
       const cached = await loaders.cachedOutput(target.dossierId, p.blockId, targetKey);
       if (!cached) return { missing: `block "${p.blockId}" has no cached output for ${targetKey}` };

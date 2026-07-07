@@ -5,6 +5,7 @@ export type BlockInput =
   | { kind: 'fact-pool' }
   | { kind: 'raw-content' }                 // item scope only — documents.content
   | { kind: 'item-metadata' }               // item scope only — title/url/siteName/publishedAt
+  | { kind: 'item-facts' }                  // item scope only — the target document's facts
   | { kind: 'block'; blockId: string }      // same-scope cached output of another block
   | { kind: 'all-items'; blockId: string }; // page scope only — every item's cached output of blockId
 
@@ -15,6 +16,7 @@ export type ResolvedInputs = {
   factPool?: { facts: { id: string; text: string; sourceUrl: string; sourcePassage: string }[]; version: string };
   rawContent?: { text: string; title: string; url: string };
   itemMetadata?: { title: string; url: string; siteName?: string; publishedAt?: string };
+  itemFacts?: { facts: { id: string; text: string; sourceUrl: string; sourcePassage: string }[] };
   blocks?: Record<string, string>;                                  // blockId → cached content
   allItems?: Record<string, { targetKey: string; content: string }[]>; // blockId → outputs across items
 };
@@ -25,5 +27,6 @@ export type BlockDef = {
   scope: BlockScope | 'both';
   prerequisites: BlockInput[];
   staleness: 'auto-on-refresh' | 'on-demand';
+  hidden?: boolean; // internal blocks (e.g. bundles) — excluded from the user-facing library
   generate: (inputs: ResolvedInputs, ctx: { language: string }) => Promise<{ content: string; citations: BlockCitation[] }>;
 };

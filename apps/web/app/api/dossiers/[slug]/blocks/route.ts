@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   if (!dossier) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
   const [instances, outputs] = await Promise.all([listInstances(dossier.id), listOutputs(dossier.id)]);
-  const library = listBlocks().map((b) => ({ id: b.id, name: b.name, scope: b.scope, staleness: b.staleness }));
+  const library = listBlocks().filter((b) => !b.hidden).map((b) => ({ id: b.id, name: b.name, scope: b.scope, staleness: b.staleness }));
   return NextResponse.json({ instances, outputs, library });
 }
 

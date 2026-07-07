@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, jsonb, real, uuid, uniqueIndex, integer, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, jsonb, real, uuid, uniqueIndex, index, integer, boolean } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { user } from './auth-schema';
 
 export const dossiers = pgTable('dossiers', {
@@ -97,3 +98,25 @@ export const facts = pgTable('facts', {
   extractedAt: timestamp('extracted_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+import type { JobType, JobStatus, JobParams, JobProgress } from '../jobs/policy';
+
+export const jobs = pgTable('jobs', {
+  id: uuid('id').primaryKey(),
+  dossierId: uuid('dossier_id').notNull().references(() => dossiers.id, { onDelete: 'cascade' }),
+  type: text('type').$type<JobType>().notNull(),
+  status: text('status').$type<JobStatus>().notNull().default('queued'),
+  params: jsonb('params').$type<JobParams>().notNull(),
+  progress: jsonb('progress').$type<JobProgress>(),
+  error: text('error'),
+  attempts: integer('attempts').notNull().default(0),
+  heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+}, (t) => [
+  index('jobs_status_created_idx').on(t.status, t.createdAt),
+  index('jobs_dossier_idx').on(t.dossierId),
+  // At most ONE active (queued|running) job per dossier — enforced by the DB.
+  uniqueIndex('jobs_one_active_per_dossier_idx').on(t.dossierId).where(sql`status in ('queued','running')`),
+]);

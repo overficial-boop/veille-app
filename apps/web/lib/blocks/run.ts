@@ -10,6 +10,7 @@ export type ExecDeps = {
   resolve: (def: BlockDef, targetKey: string) => Promise<ResolveResult>;
   existing: (instanceId: string, targetKey: string) => Promise<{ fingerprint: string; stale: boolean } | null>;
   save: (item: WorkItem, content: string, citations: { factId?: string; url: string }[], fingerprint: string) => Promise<void>;
+  unstale: (instanceId: string, targetKey: string) => Promise<void>;
   narrate: (label: string) => void;
 };
 
@@ -33,7 +34,10 @@ export async function executeBlocks(items: WorkItem[], ctx: { dossierId: string;
     const r = await deps.resolve(def, item.targetKey);
     if ('missing' in r) { res.missed.push({ blockId: def.id, reason: r.missing }); continue; }
     const cached = await deps.existing(item.instanceId, item.targetKey);
-    if (cached && cached.fingerprint === r.fingerprint && !cached.stale) {
+    if (cached && cached.fingerprint === r.fingerprint) {
+      // Identical inputs ⇒ provably fresh. If it was flagged stale by a refresh, clear the flag —
+      // the fingerprint, not the flag, is the source of truth.
+      if (cached.stale) await deps.unstale(item.instanceId, item.targetKey);
       res.skipped.push(def.id);
       continue;
     }
@@ -57,7 +61,7 @@ export async function runBlocksJob(
   params: { instanceIds?: string[]; targetKeys?: string[] },
   narrate: (label: string) => void,
 ): Promise<ExecResult> {
-  const { listInstances, upsertOutput, dbLoaders } = await import('./store');
+  const { listInstances, upsertOutput, dbLoaders, clearStaleOutput } = await import('./store');
   const { getBlock } = await import('./index');
   const { resolveInputs } = await import('./resolve');
   const { db } = await import('../db');
@@ -67,7 +71,7 @@ export async function runBlocksJob(
   const [dossier] = await db.select({ language: dossiers.language }).from(dossiers).where(eq(dossiers.id, dossierId));
   const language = dossier?.language ?? 'fr';
   const instances = await listInstances(dossierId, params.instanceIds);
-  const loaders = dbLoaders();
+  const loaders = dbLoaders(dossierId);
 
   // Page instances target 'page'; item instances fan out over the provided targetKeys (documents).
   const items: WorkItem[] = [];
@@ -86,6 +90,7 @@ export async function runBlocksJob(
     },
     save: (item, content, citations, fingerprint) =>
       upsertOutput({ instanceId: item.instanceId, targetKey: item.targetKey, content, citations, fingerprint }),
+    unstale: (instanceId, targetKey) => { const p = clearStaleOutput(instanceId, targetKey); return p; },
     narrate,
   });
 }

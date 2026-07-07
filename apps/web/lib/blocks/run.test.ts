@@ -12,6 +12,7 @@ const deps = (defs: BlockDef[], over: Partial<ExecDeps> = {}): ExecDeps => ({
   resolve: vi.fn(async (def) => ({ inputs: {}, fingerprint: `fp-${def.id}` })),
   existing: vi.fn(async () => null),
   save: vi.fn(async () => {}),
+  unstale: vi.fn(async () => {}),
   narrate: vi.fn(),
   ...over,
 });
@@ -36,9 +37,20 @@ describe('executeBlocks', () => {
     expect(a.generate).not.toHaveBeenCalled();
   });
 
-  it('regenerates when cached output is stale even with same fingerprint', async () => {
+  it('stale but fingerprint-identical output is re-verified: unstaled and skipped, no regeneration', async () => {
     const a = mk('a');
-    const d = deps([a], { existing: vi.fn(async () => ({ fingerprint: 'fp-a', stale: true })) });
+    const unstale = vi.fn(async () => {});
+    const d = deps([a], { existing: vi.fn(async () => ({ fingerprint: 'fp-a', stale: true })), unstale });
+    const res = await executeBlocks([{ instanceId: 'ia', blockId: 'a', targetKey: 'doc1' }], { dossierId: 'D', language: 'fr' }, d);
+    expect(res.ran).toEqual([]);
+    expect(res.skipped).toEqual(['a']);
+    expect(unstale).toHaveBeenCalledWith('ia', 'doc1');
+    expect(a.generate).not.toHaveBeenCalled();
+  });
+
+  it('stale output with changed fingerprint regenerates', async () => {
+    const a = mk('a');
+    const d = deps([a], { existing: vi.fn(async () => ({ fingerprint: 'old-fp', stale: true })) });
     const res = await executeBlocks([{ instanceId: 'ia', blockId: 'a', targetKey: 'doc1' }], { dossierId: 'D', language: 'fr' }, d);
     expect(res.ran).toEqual(['a']);
   });

@@ -63,8 +63,15 @@ export async function markStaleForDossier(dossierId: string): Promise<number> {
   return res.length;
 }
 
-/** Production BlockLoaders bound to the real DB (the resolver stays pure; this is its only impure binding). */
-export function dbLoaders(): BlockLoaders {
+/** Fingerprint matched after a stale-marking refresh: the output is provably fresh — clear the flag. */
+export async function clearStaleOutput(instanceId: string, targetKey: string): Promise<void> {
+  await db.update(blockOutputs).set({ stale: false })
+    .where(and(eq(blockOutputs.instanceId, instanceId), eq(blockOutputs.targetKey, targetKey)));
+}
+
+/** Production BlockLoaders bound to the real DB (the resolver stays pure; this is its only impure binding).
+ *  Scoped to a single dossier: the document loader must never resolve a foreign-dossier document id. */
+export function dbLoaders(dossierId: string): BlockLoaders {
   return {
     async factPool(dossierId) {
       const [d] = await db.select({ refreshedAt: dossiers.refreshedAt }).from(dossiers).where(eq(dossiers.id, dossierId));
@@ -73,10 +80,12 @@ export function dbLoaders(): BlockLoaders {
       return { facts: rows, version: factPoolFingerprint(d?.refreshedAt?.toISOString() ?? null, rows.length) };
     },
     async document(documentId) {
+      // Scoped by dossierId (from the closure), not just id: a foreign document id must resolve to
+      // null (recorded as a miss upstream) rather than leak another tenant's document content.
       const [doc] = await db.select({
         content: documents.content, title: documents.title, url: documents.url,
         siteName: documents.siteName, publishedAt: documents.publishedAt,
-      }).from(documents).where(eq(documents.id, documentId));
+      }).from(documents).where(and(eq(documents.id, documentId), eq(documents.dossierId, dossierId)));
       return doc ? { ...doc, title: doc.title ?? '', siteName: doc.siteName ?? undefined } : null;
     },
     // At most one row can match: page instances only write targetKey='page', item instances only

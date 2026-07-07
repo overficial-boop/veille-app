@@ -3,9 +3,9 @@ import { registerBlock, validateRegistry, listBlocks, getBlock } from './registr
 import { execSummaryBlock } from './generators/exec-summary';
 import { tldrBlock } from './generators/tldr';
 
-const g = globalThis as { __verso_blocksRegistered?: boolean };
-if (!g.__verso_blocksRegistered) {
-  g.__verso_blocksRegistered = true;
+// Self-healing bootstrap: after dev-HMR the registry Map may be recreated empty while any
+// global flag would survive — so guard on the registry's own state, not a flag.
+if (!getBlock(execSummaryBlock.id)) {
   registerBlock(execSummaryBlock);
   registerBlock(tldrBlock);
   const errors = validateRegistry();

@@ -67,7 +67,8 @@ async function runJob(job: JobRow): Promise<void> {
           void writeProgress(job.id, progress).catch(() => {});
         }
       });
-      progress = { ...progress, headline: `Blocs générés : ${r.ran.length} (à jour : ${r.skipped.length}${r.failed.length ? `, échecs : ${r.failed.length}` : ''})` };
+      const summary = `Blocs générés : ${r.ran.length} (à jour : ${r.skipped.length}${r.failed.length ? `, échecs : ${r.failed.length}` : ''})`;
+      progress = pushStep(progress, { phase: 'analyzing', headline: summary, label: summary }, new Date().toISOString(), STEP_CAP);
     }
     progress = { ...progress, phase: 'done', headline: 'Veille prête.' };
     await writeProgress(job.id, progress);

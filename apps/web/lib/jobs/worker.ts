@@ -43,11 +43,28 @@ async function runJob(job: JobRow): Promise<void> {
     if (job.type === 'assemble' || job.type === 'refresh') {
       const phase = job.type === 'assemble' ? 'assemble' : 'refresh';
       await refreshDossier(job.dossierId, { phase, language, recencyDays: job.params.recencyDays, onProgress });
+      const { markStaleForDossier } = await import('../blocks/store');
+      const stale = await markStaleForDossier(job.dossierId);
+      if (stale > 0) {
+        progress = pushStep(progress, { phase: 'analyzing', headline: 'Blocs à rafraîchir', label: `${stale} bloc(s) à rafraîchir` }, new Date().toISOString(), STEP_CAP);
+        void writeProgress(job.id, progress).catch(() => {});
+      }
       if (job.type === 'assemble' && job.params.autoBrief) {
         await composeDossier(job.dossierId, { mode: 'brief', language, onProgress });
       }
     } else if (job.type === 'brief') {
       await composeDossier(job.dossierId, { mode: 'brief', language, scope: job.params.scope, onProgress });
+    } else if (job.type === 'blocks') {
+      const { runBlocksJob } = await import('../blocks/run');
+      const r = await runBlocksJob(job.dossierId, job.params, (label) => {
+        progress = pushStep(progress, { phase: 'analyzing', headline: 'Génération des blocs…', label }, new Date().toISOString(), STEP_CAP);
+        const now = Date.now();
+        if (throttleProgress(lastFlush, now, FLUSH_MS)) {
+          lastFlush = now;
+          void writeProgress(job.id, progress).catch(() => {});
+        }
+      });
+      progress = { ...progress, headline: `Blocs générés : ${r.ran.length} (à jour : ${r.skipped.length}${r.failed.length ? `, échecs : ${r.failed.length}` : ''})` };
     }
     progress = { ...progress, phase: 'done', headline: 'Veille prête.' };
     await writeProgress(job.id, progress);
